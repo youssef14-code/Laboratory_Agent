@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
 from models.models import Subscription, db
+from software_service.base_service import BaseService
 
 
-class SubscriptionService:
+class SubscriptionService(BaseService):
+
 
     # ==========================================================
     # Getters

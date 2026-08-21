@@ -1,10 +1,13 @@
+import token
+
 from models.models import Page, Client, Platform, db
 from sqlalchemy.orm import joinedload
+from software_service.base_service import BaseService
 from software_service.platform_services import PlatformService
 from software_service.client_services import ClientService
 
 
-class PageService:
+class PageService(BaseService):
 
     # ── Pages ──────────────────────────────────────────────────────────────
 
@@ -22,50 +25,47 @@ class PageService:
 
     @staticmethod
     def create_page(laboratory_id, platform_id, page_id, token):
+        if not page_id or not page_id.strip():
+            return None, "معرّف الصفحة مطلوب"
+        if not token or not token.strip():
+            return None, "الرمز (Token) مطلوب"
+        if not laboratory_id:
+            return None, "المعمل مطلوب"
+        if not platform_id:
+            return None, "المنصة مطلوبة"   
+           
         page_id = page_id.strip()
         existing = Page.query.filter_by(platform_id=platform_id, page_id=page_id).first()
         if existing:
             return None, "هذه الصفحة مضافة بالفعل لهذه المنصة"
 
-        try:
-            new_page = Page(
-                laboratory_id=laboratory_id,
-                platform_id=platform_id,
-                page_id=page_id,
-                token=token.strip(),
-            )
-            db.session.add(new_page)
-            db.session.commit()
-            return new_page, "تم إضافة الصفحة بنجاح"
-        except Exception as e:
-            db.session.rollback()
-            return None, f"حدث خطأ أثناء إضافة الصفحة: {str(e)}"
+        new_page = Page(
+            laboratory_id=laboratory_id,
+            platform_id=platform_id,
+            page_id=page_id,
+            token=token.strip(),
+        )
+        return BaseService.commit(new_page, success_msg="تم إضافة الصفحة بنجاح", error_prefix="حدث خطأ أثناء إضافة الصفحة")
 
     @staticmethod
     def update_page_token(platform_id, page_id, token):
+        if not token or not token.strip():
+            return None, "الرمز (Token) مطلوب"
+        
         page = Page.query.filter_by(platform_id=platform_id, page_id=page_id).first()
         if not page:
             return None, "الصفحة غير موجودة"
-        try:
-            page.token = token.strip()
-            db.session.commit()
-            return page, "تم تحديث الرمز بنجاح"
-        except Exception as e:
-            db.session.rollback()
-            return None, f"حدث خطأ أثناء التحديث: {str(e)}"
+
+        page.token = token.strip()
+        return BaseService.update_commit(page, success_msg="تم تحديث الرمز بنجاح", error_prefix="حدث خطأ أثناء التحديث")
 
     @staticmethod
     def delete_page(platform_id, page_id):
         page = Page.query.filter_by(platform_id=platform_id, page_id=page_id).first()
         if not page:
             return None, "الصفحة غير موجودة"
-        try:
-            db.session.delete(page)
-            db.session.commit()
-            return page, "تم حذف الصفحة بنجاح"
-        except Exception as e:
-            db.session.rollback()
-            return None, f"حدث خطأ أثناء الحذف: {str(e)}"
+
+        return BaseService.delete(page, success_msg="تم حذف الصفحة بنجاح", error_prefix="حدث خطأ أثناء الحذف")
 
     # ── Platforms (for the dropdown when adding a page) ────────────────────
 

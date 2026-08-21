@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}معمل جديد{% endblock %}
+{% block topbar_title %}معمل جديد{% endblock %}
+{% block topbar_sub %}إضافة بيانات معمل جديد{% endblock %}
+
+{% block content %}
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header">
+    <span class="card-title">بيانات المعمل</span>
+  </div>
+
+  <form action="{{ url_for('create_laboratory') }}" method="POST" style="padding:1.5rem;">
+    <div class="form-grid">
+
+      <div class="form-group full-width">
+        <label>اسم المعمل <span style="color:#f87171;">*</span></label>
+        <input
+          type="text"
+          name="name"
+          class="form-control"
+          placeholder="مثال: معامل الشفاء المركزية"
+          required
+          value="{{ request.form.get('name', '') }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>معلومات إضافية</label>
+        <textarea
+          name="info"
+          class="form-control"
+          rows="3"
+          placeholder="مثال: مواعيد العمل، أرقام التواصل..."
+        >{{ request.form.get('info', '') }}</textarea>
+      </div>
+
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" style="margin-bottom:1rem;">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="form-actions" style="margin-top:1.5rem;">
+      <button type="submit" class="btn btn-primary btn-submit">حفظ المعمل</button>
+      <a href="{{ url_for('list_laboratories') }}" class="btn btn-ghost">رجوع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}الشكاوى{% endblock %}
+
+{% block topbar_title %}الشكاوى{% endblock %}
+{% block topbar_sub %}شكاوى العملاء المُرسَلة{% endblock %}
+
+{% block content %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon si-blue">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-label">إجمالي الشكاوى</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon si-amber">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+      </svg>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.pending }}</div>
+      <div class="stat-label">قيد الانتظار</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon si-green">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.reviewed }}</div>
+      <div class="stat-label">تمت المراجعة</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon si-red">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.attended }}</div>
+      <div class="stat-label">تمت المعالجة</div>
+    </div>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <form method="GET" action="{{ url_for('list_complaints') }}" class="toolbar-filters">
+    <div class="search-box">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        name="search"
+        placeholder="بحث برقم الهاتف أو نص الشكوى..."
+        value="{{ search }}"
+        class="search-input"
+      >
+    </div>
+
+    <select name="status" class="form-control" style="width:160px" onchange="this.form.submit()">
+      <option value="">كل الحالات</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.value }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="btn btn-primary">بحث</button>
+    {% if search or status %}
+    <a href="{{ url_for('list_complaints') }}" class="btn btn-ghost">مسح</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">قائمة الشكاوى</span>
+    <span class="text-muted" style="font-size:.85rem">{{ pagination.total }} نتيجة</span>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>رقم الهاتف</th>
+          <th>نص الشكوى</th>
+          <th>المصدر</th>
+          <th>الحالة</th>
+          <th>التاريخ</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for complaint in complaints %}
+        <tr>
+          <td class="text-muted">{{ complaint.id }}</td>
+
+          <td>
+            <span style="font-weight:600">{{ complaint.phone_number }}</span>
+          </td>
+
+          <td style="max-width:260px">
+            <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)">
+              {{ complaint.complaint_text }}
+            </span>
+          </td>
+
+          <td>
+            <span class="pill pill-reviewed">{{ complaint.comes_from or '—' }}</span>
+          </td>
+
+          <td>
+            <form method="POST" action="{{ url_for('update_complaint_status', complaint_id=complaint.id) }}">
+              <select
+                name="status"
+                onchange="this.form.submit()"
+                class="status-select status-{{ complaint.status.value | lower | replace(' ', '-') }}"
+              >
+                {% for s in statuses %}
+                <option value="{{ s.value }}" {% if complaint.status == s %}selected{% endif %}>{{ s.value }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+
+          <td class="text-muted">
+            {{ complaint.created_at.strftime('%Y-%m-%d') if complaint.created_at else '—' }}
+          </td>
+
+          <td>
+            <div style="display:flex;gap:.4rem">
+              <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-ghost btn-sm">عرض</a>
+              <form method="POST" action="{{ url_for('delete_complaint', complaint_id=complaint.id) }}"
+                    onsubmit="return confirm('هل أنت متأكد من حذف هذه الشكوى؟')">
+                <button class="btn btn-danger btn-sm">حذف</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+            لا توجد شكاوى
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if pagination.pages > 1 %}
+  <div class="pagination">
+    {% if pagination.has_prev %}
+      <a href="{{ url_for('list_complaints', page=pagination.prev_num, search=search, status=status) }}" class="page-btn">→</a>
+    {% endif %}
+    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+        <a href="{{ url_for('list_complaints', page=p, search=search, status=status) }}"
+           class="page-btn {% if p == pagination.page %}active{% endif %}">{{ p }}</a>
+      {% else %}
+        <span class="page-btn" style="opacity:.4">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+      <a href="{{ url_for('list_complaints', page=pagination.next_num, search=search, status=status) }}" class="page-btn">←</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

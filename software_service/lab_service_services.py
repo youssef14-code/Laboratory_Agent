@@ -8,7 +8,7 @@ from software_service.base_service import BaseService
 
 
 
-class LabServiceService:
+class LabServiceService(BaseService):
 
     # -- list / search --------------------------------------------------------
 
@@ -77,14 +77,16 @@ class LabServiceService:
         lab = db.session.get(LabService, lab_id)
         if not lab:
             return None, "التحليل غير موجود"
-
+        if price is not None:
+            try:
+                price = float(price)
+            except (TypeError, ValueError):
+                return None, "السعر غير صحيح"
+            
         if name is not None:
             lab.name = name.strip()
         if price is not None:
-            try:
-                lab.price = float(price)
-            except (TypeError, ValueError):
-                return None, "السعر غير صحيح"
+            lab.price = price
         if sample_type is not None:
             lab.sample_type = sample_type.strip() or None
         if durations is not None:

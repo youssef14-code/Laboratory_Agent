@@ -2,7 +2,8 @@ from models.models import User, db
 from software_service.base_service import BaseService
 
 
-class UserService:
+class UserService(BaseService):
+
 
     
     @staticmethod
@@ -18,7 +19,7 @@ class UserService:
     
     @staticmethod
     def update_user(user_id, name=None, password=None):
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
 
         if not user:
             return None, "المستخدم غير موجود"
@@ -49,7 +50,7 @@ class UserService:
     
     @staticmethod
     def get_user_by_id(user_id):
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
 
         if user:
             return user, "تم العثور على المستخدم"

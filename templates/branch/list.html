@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}فروع {{ laboratory.name }}{% endblock %}
+{% block topbar_title %}فروع {{ laboratory.name }}{% endblock %}
+{% block topbar_sub %}إدارة فروع المعمل وعناوينها{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('list_laboratories') }}" class="btn btn-ghost">
+    <i data-lucide="arrow-right" style="width:16px;height:16px;"></i>
+    رجوع للمعامل
+  </a>
+  <a href="{{ url_for('create_branch', lab_id=laboratory.id) }}" class="btn btn-primary">
+    <i data-lucide="plus" style="width:16px;height:16px;"></i>
+    فرع جديد
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-header" style="display:flex;align-items:center;gap:10px;">
+    <i data-lucide="map-pin" style="color:var(--primary);"></i>
+    <span class="card-title">قائمة الفروع</span>
+    <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);background:#f1f5f9;padding:3px 10px;border-radius:var(--radius-full);">
+      {{ branches|length }} فرع
+    </span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--surface-border);">
+          <th style="text-align:right;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">العنوان</th>
+          <th style="text-align:right;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">الهاتف</th>
+          <th style="text-align:right;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">ساعات العمل</th>
+          <th style="text-align:left;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for branch in branches %}
+        <tr class="branch-row" style="border-bottom:1px solid var(--surface-border);transition:var(--transition);">
+          <td style="padding:14px 16px;">
+            <span style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text-primary);">
+              <i data-lucide="map-pin" style="width:14px;height:14px;color:var(--text-muted);flex-shrink:0;"></i>
+              {{ branch.address }}
+            </span>
+          </td>
+          <td style="padding:14px 16px;color:var(--text-secondary);">
+            {{ branch.phone or '—' }}
+          </td>
+          <td style="padding:14px 16px;color:var(--text-secondary);">
+            {{ branch.working_hours or '—' }}
+          </td>
+          <td style="padding:14px 16px;">
+            <div style="display:flex;gap:8px;justify-content:flex-start;">
+              <a href="{{ url_for('edit_branch', branch_id=branch.id) }}" class="btn btn-ghost btn-sm" title="تعديل">
+                <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+                تعديل
+              </a>
+              <form action="{{ url_for('delete_branch', branch_id=branch.id) }}" method="POST"
+                    onsubmit="event.preventDefault(); confirmDelete(this);" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm" title="حذف">
+                  <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+                  حذف
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" style="padding:0;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 20px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;">
+                <i data-lucide="map-pin" style="width:26px;height:26px;color:var(--text-muted);"></i>
+              </div>
+              <div style="text-align:center;">
+                <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">
+                  لا توجد فروع مسجلة لهذا المعمل بعد
+                </div>
+                <div style="font-size:0.85rem;color:var(--text-muted);">
+                  ابدأ بإضافة أول فرع لمعمل {{ laboratory.name }}
+                </div>
+              </div>
+              <a href="{{ url_for('create_branch', lab_id=laboratory.id) }}" class="btn btn-primary" style="margin-top:4px;">
+                <i data-lucide="plus" style="width:16px;height:16px;"></i>
+                إضافة فرع
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination and pagination.pages > 1 %}
+  <div class="pagination" style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;border-top:1px solid var(--surface-border);">
+    {% if pagination.has_prev %}
+      <a href="{{ url_for('list_branches', lab_id=laboratory.id, page=pagination.prev_num) }}" class="btn btn-ghost btn-sm">
+        <i data-lucide="chevron-right" style="width:14px;height:14px;"></i>
+        السابق
+      </a>
+    {% endif %}
+    <span style="font-size:0.85rem;color:var(--text-muted);font-weight:600;">{{ pagination.page }} / {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+      <a href="{{ url_for('list_branches', lab_id=laboratory.id, page=pagination.next_num) }}" class="btn btn-ghost btn-sm">
+        التالي
+        <i data-lucide="chevron-left" style="width:14px;height:14px;"></i>
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<style>
+.branch-row:hover {
+  background: #f8fafc;
+}
+</style>
+
+<script>
+function confirmDelete(form) {
+  if (confirm('هل أنت متأكد من حذف هذا الفرع؟ لا يمكن التراجع عن هذا الإجراء.')) {
+    form.submit();
+  }
+}
+</script>
+
+{% endblock %}

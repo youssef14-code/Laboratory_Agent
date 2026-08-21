@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}تعديل التحليل{% endblock %}
+{% block topbar_title %}تعديل التحليل{% endblock %}
+{% block topbar_sub %}{{ lab.name }}{% endblock %}
+
+{% block content %}
+
+<div class="card" style="max-width:720px;margin:0 auto;">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <i data-lucide="edit-3" style="color:var(--primary);"></i>
+      <span class="card-title">تعديل بيانات التحليل الطبي</span>
+    </div>
+  </div>
+
+  <form action="{{ url_for('edit_lab', lab_id=lab.id) }}" method="POST" style="padding:24px;">
+    <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+      <div class="form-group" style="grid-column: span 2;">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">اسم التحليل <span style="color:#ef4444;">*</span></label>
+        <input
+          type="text"
+          name="name"
+          class="form-control"
+          required
+          value="{{ request.form.get('name', lab.name) }}"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">السعر (ج.م) <span style="color:#ef4444;">*</span></label>
+        <input
+          type="number"
+          step="0.01"
+          name="price"
+          class="form-control"
+          required
+          value="{{ request.form.get('price', lab.price) }}"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">العينة المطلوبة</label>
+        <input
+          type="text"
+          name="specimen"
+          class="form-control"
+          value="{{ request.form.get('specimen', lab.specimen or '') }}"
+        >
+      </div>
+
+      <div class="form-group" style="grid-column: span 2;">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">مدة ظهور النتيجة</label>
+        <input
+          type="text"
+          name="durations"
+          class="form-control"
+          value="{{ request.form.get('durations', lab.durations or '') }}"
+        >
+      </div>
+
+      <div class="form-group" style="grid-column: span 2;">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">تعليمات للمريض</label>
+        <textarea
+          name="patient_instructions"
+          class="form-control"
+          rows="3"
+        >{{ request.form.get('patient_instructions', lab.patient_instructions or '') }}</textarea>
+      </div>
+
+      <div class="form-group" style="grid-column: span 2;">
+        <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">
+          الوصف الطبي المعالج بالذكاء الاصطناعي
+          <small style="color:var(--text-muted);font-weight:normal;">(يُولد تلقائياً)</small>
+        </label>
+        <textarea
+          class="form-control"
+          rows="3"
+          disabled
+          style="background:#f1f5f9;opacity:0.8;cursor:not-allowed;"
+        >{{ lab.description or 'لم يتم توليد وصف AI بعد' }}</textarea>
+      </div>
+
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" style="margin-top:16px;">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="form-actions" style="margin-top:24px;display:flex;gap:12px;justify-content:flex-end;">
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i data-lucide="save"></i>
+        حفظ التعديلات
+      </button>
+      <a href="{{ url_for('list_labs') }}" class="btn btn-ghost btn-lg">إلغاء وتراجع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

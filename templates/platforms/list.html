@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}المنصات{% endblock %}
+{% block topbar_title %}المنصات{% endblock %}
+{% block topbar_sub %}منصات التواصل الاجتماعي المتاحة للربط{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('create_platform') }}" class="btn btn-primary">+ إضافة منصة</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>اسم المنصة</th>
+          <th>عدد الصفحات المرتبطة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for platform in platforms %}
+        <tr>
+          <td>{{ platform.name }}</td>
+          <td>{{ platform.pages|length }}</td>
+          <td class="actions-cell">
+            <a href="{{ url_for('edit_platform', platform_id=platform.id) }}" class="btn btn-ghost btn-sm">تعديل</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="empty-row">لا توجد منصات مضافة حتى الآن</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

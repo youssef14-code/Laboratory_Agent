@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}تفاصيل الحجز{% endblock %}
+{% block topbar_title %}تفاصيل الحجز{% endblock %}
+{% block topbar_sub %}{{ booking.name }} — #{{ booking.reference_id }}{% endblock %}
+
+{% block topbar_actions %}
+  <form method="POST" action="{{ url_for('delete_booking', booking_id=booking.id) }}"
+        onsubmit="return confirm('هل أنت متأكد؟')">
+    <button type="submit" class="btn btn-danger">حذف</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:1.5rem;align-items:start;">
+
+  <!-- Main info card -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">بيانات الحجز</span>
+      <code style="background:rgba(99,102,241,.1);color:#818cf8;padding:.25rem .75rem;border-radius:6px;font-size:.9rem;">
+        #{{ booking.reference_id }}
+      </code>
+    </div>
+    <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">الاسم</div>
+        <div style="font-weight:600;font-size:1.05rem;">{{ booking.name }}</div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">رقم الهاتف</div>
+        <div style="font-weight:600;">{{ booking.phone_number }}</div>
+      </div>
+      
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">العنوان</div>
+        <div style="font-weight:600;">
+          {{ booking.address or '—' }}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">تاريخ الحجز</div>
+        <div>{{ booking.date or '—' }}</div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">المصدر</div>
+        <div>{{ booking.comes_from or '—' }}</div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">وقت التسجيل</div>
+        <div>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M') if booking.booking_time else '—' }}</div>
+      </div>
+
+      {% if booking.details %}
+      <div style="grid-column:1/-1;">
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">تفاصيل إضافية</div>
+        <div style="
+          background:var(--bg-main);
+          border:1px solid var(--border);
+          border-radius:8px;
+          padding:1rem;
+          line-height:1.7;
+        ">{{ booking.details }}</div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- Status card -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">الحالة</span>
+    </div>
+    <div style="padding:1.5rem;">
+      <form method="POST" action="{{ url_for('update_booking_status', booking_id=booking.id) }}">
+        <div class="form-group">
+          <label>تغيير الحالة</label>
+          <select name="status" class="form-control status-select status-{{ booking.status.value | lower | replace(' ', '-') }}">
+            {% for s in all_statuses %}
+              <option value="{{ s.value }}" {% if booking.status == s %}selected{% endif %}>
+                {{ s.value }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">تحديث الحالة</button>
+      </form>
+
+      <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.5rem;">الحالة الحالية</div>
+        <span class="pill pill-{{ booking.status.value | lower | replace(' ', '-') }}" style="font-size:.95rem;padding:.4rem 1rem;">
+          {{ booking.status.value }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:1rem;">
+  <a href="{{ url_for('list_bookings') }}" class="btn btn-ghost">← رجوع للقائمة</a>
+</div>
+
+{% endblock %}

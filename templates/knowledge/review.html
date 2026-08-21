@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% block title %}مراجعة المعرفة الذكية{% endblock %}
+{% block topbar_title %}أتمتة المعرفة الطبية{% endblock %}
+{% block topbar_sub %}{{ entity.name }}{% endblock %}
+
+{% block head %}
+<style>
+  .kp-wrap { --ink:#1e1b4b; --violet:#4f46e5; --violet-light:#eef2ff; --mist:#f8fafc;
+             --emerald:#10b981; --emerald-light:#ecfdf5; --amber:#f59e0b; --amber-light:#fffbeb;
+             --line:#e2e8f0; --ink-soft:#64748b;
+             display:grid; grid-template-columns: 1fr 300px; gap:20px; align-items:start; }
+  @media (max-width: 900px) { .kp-wrap { grid-template-columns: 1fr; } .kp-side { order:-1; } }
+
+  /* ---- Header ---- */
+  .kp-hero { background:linear-gradient(135deg, var(--ink) 0%, #312e81 100%); color:#fff;
+             padding:28px 28px 24px; border-radius:16px 16px 0 0; position:relative; overflow:hidden; }
+  .kp-hero::after { content:''; position:absolute; inset:0; background:
+             radial-gradient(circle at 85% -10%, rgba(255,255,255,.12), transparent 55%); pointer-events:none; }
+  .kp-eyebrow { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.15);
+             padding:4px 12px; border-radius:999px; font-size:.78rem; font-weight:700; margin-bottom:10px; }
+  .kp-eyebrow svg { width:13px; height:13px; color:#a5b4fc; }
+  .kp-title { font-size:1.5rem; font-weight:800; margin-bottom:2px; }
+  .kp-price { position:absolute; top:26px; left:28px; font-size:1.15rem; font-weight:800; color:#6ee7b7;
+             background:rgba(16,185,129,.15); padding:7px 16px; border-radius:10px; border:1px solid rgba(110,231,183,.3); }
+
+  /* ---- Pipeline stepper (signature element) ---- */
+  .kp-stepper { background:#fff; border:1px solid var(--line); border-top:none; border-radius:0 0 16px 16px;
+             padding:18px 28px; display:flex; align-items:center; gap:0; }
+  .kp-step { display:flex; align-items:center; gap:10px; flex:1; }
+  .kp-step-dot { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+             font-size:.8rem; font-weight:800; flex-shrink:0; background:var(--mist); color:var(--ink-soft);
+             border:2px solid var(--line); transition:.25s; }
+  .kp-step-label { font-size:.85rem; font-weight:700; color:var(--ink-soft); }
+  .kp-step.done .kp-step-dot { background:var(--emerald); border-color:var(--emerald); color:#fff; }
+  .kp-step.done .kp-step-label { color:var(--emerald); }
+  .kp-step.active .kp-step-dot { background:var(--amber); border-color:var(--amber); color:#fff;
+             box-shadow:0 0 0 4px var(--amber-light); }
+  .kp-step.active .kp-step-label { color:#b45309; }
+  .kp-step-line { flex:1; height:2px; background:var(--line); margin:0 6px; }
+
+  /* ---- Form card ---- */
+  .kp-card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:28px; margin-top:20px; }
+  .kp-field { margin-bottom:24px; }
+  .kp-field:last-child { margin-bottom:0; }
+  .kp-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .kp-label-text { font-weight:800; font-size:.95rem; color:var(--ink); display:flex; align-items:center; gap:7px; }
+  .kp-label-text svg { width:17px; height:17px; color:var(--violet); }
+  .kp-count { font-size:.72rem; color:var(--ink-soft); font-weight:600; }
+  .kp-textarea { width:100%; line-height:1.8; font-size:.98rem; padding:14px 16px; border-radius:10px;
+             border:1.5px solid var(--line); resize:vertical; font-family:inherit; transition:.15s; background:var(--mist); }
+  .kp-textarea:focus { outline:none; border-color:var(--violet); background:#fff; box-shadow:0 0 0 3px var(--violet-light); }
+  .kp-textarea.ai-filled { border-color:#c7d2fe; background:var(--violet-light); }
+  .kp-hint { font-size:.78rem; color:var(--ink-soft); margin-top:6px; }
+
+  /* ---- Sidebar ---- */
+  .kp-side { position:sticky; top:20px; display:flex; flex-direction:column; gap:16px; }
+  .kp-side-card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .kp-side-title { font-size:.78rem; font-weight:800; color:var(--ink-soft); text-transform:uppercase;
+             letter-spacing:.03em; margin-bottom:12px; }
+  .kp-fact { display:flex; justify-content:space-between; align-items:center; padding:8px 0;
+             border-bottom:1px dashed var(--line); font-size:.88rem; }
+  .kp-fact:last-child { border-bottom:none; }
+  .kp-fact-label { color:var(--ink-soft); }
+  .kp-fact-value { font-weight:700; color:var(--ink); }
+
+  /* ---- Buttons ---- */
+  .kp-actions { margin-top:24px; display:flex; gap:10px; flex-wrap:wrap; }
+  .kp-btn { display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:.9rem;
+             padding:12px 22px; border-radius:10px; border:none; cursor:pointer; transition:.15s; }
+  .kp-btn svg { width:17px; height:17px; }
+  .kp-btn-generate { background:var(--amber-light); color:#b45309; border:1.5px solid #fde68a; }
+  .kp-btn-generate:hover:not(:disabled) { background:#fef3c7; }
+  .kp-btn-approve { background:var(--emerald); color:#fff; }
+  .kp-btn-approve:hover:not(:disabled) { background:#059669; }
+  .kp-btn-ghost { background:transparent; color:var(--ink-soft); border:1.5px solid var(--line); }
+  .kp-btn:disabled { opacity:.55; cursor:not-allowed; }
+  .kp-spin { animation: kp-rotate 0.9s linear infinite; }
+  @keyframes kp-rotate { to { transform: rotate(360deg); } }
+
+  .kp-status { display:none; margin-top:16px; padding:13px 16px; border-radius:10px; font-weight:600; font-size:.88rem; }
+  .kp-status.ok { display:block; background:var(--emerald-light); color:#047857; border:1px solid #a7f3d0; }
+  .kp-status.err { display:block; background:#fff1f2; color:#be123c; border:1px solid #fecdd3; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kp-wrap">
+  <div>
+    <div class="kp-hero">
+      <div class="kp-eyebrow">
+        <i data-lucide="sparkles"></i>
+        {% if entity_type == 'lab' %}تحليل طبي{% else %}باقة تحاليل شاملة{% endif %}
+      </div>
+      <div class="kp-title">{{ entity.name }}</div>
+      <p style="font-size:.85rem;color:#c7d2fe;">مراجعة المعرفة الطبية المولّدة بالذكاء الاصطناعي قبل اعتمادها</p>
+      <div class="kp-price">{{ "%.2f"|format(entity.price or 0.0) }} ج.م</div>
+    </div>
+
+    <div class="kp-stepper" id="kpStepper">
+      <div class="kp-step" data-step="generate">
+        <div class="kp-step-dot">1</div>
+        <div class="kp-step-label">توليد بالذكاء الاصطناعي</div>
+      </div>
+      <div class="kp-step-line"></div>
+      <div class="kp-step" data-step="review">
+        <div class="kp-step-dot">2</div>
+        <div class="kp-step-label">مراجعة وتعديل</div>
+      </div>
+      <div class="kp-step-line"></div>
+      <div class="kp-step" data-step="approve">
+        <div class="kp-step-dot">3</div>
+        <div class="kp-step-label">اعتماد وحفظ</div>
+      </div>
+    </div>
+
+    <form id="knowledgeForm" class="kp-card">
+      <div class="kp-field">
+        <label class="kp-label">
+          <span class="kp-label-text"><i data-lucide="file-text"></i> الوصف الطبي الشامل</span>
+          <span class="kp-count" id="count-description">0 حرف</span>
+        </label>
+        <textarea id="field-description" name="description" class="kp-textarea" rows="7"
+          placeholder="انقر على «توليد بالذكاء الاصطناعي» لإنشاء الوصف تلقائياً...">{{ entity.description or '' }}</textarea>
+      </div>
+
+      <div class="kp-field">
+        <label class="kp-label">
+          <span class="kp-label-text"><i data-lucide="tags"></i> الأسماء البديلة والمرادفات</span>
+          <span class="kp-count" id="count-alias-names">0 حرف</span>
+        </label>
+        <textarea id="field-alias-names" name="alias_names" class="kp-textarea" rows="3"
+          placeholder="مثال: فحص الدم الشامل, CBC, تحليل صورة الدم الوريدي...">{{ entity.alias_names or '' }}</textarea>
+        <p class="kp-hint">افصل بين كل اسم بديل بفاصلة — كل اسم يساعد المرضى على إيجاد هذا التحليل بسهولة</p>
+      </div>
+
+      <div class="kp-field">
+        <label class="kp-label">
+          <span class="kp-label-text"><i data-lucide="key-round"></i> الكلمات المفتاحية للبحث</span>
+          <span class="kp-count" id="count-keywords">0 حرف</span>
+        </label>
+        <textarea id="field-keywords" name="keywords" class="kp-textarea" rows="3"
+          placeholder="كلمات مفتاحية للبحث التلقائي يفصل بينها فاصلة...">{{ entity.keywords or '' }}</textarea>
+      </div>
+
+      <div class="kp-field">
+        <label class="kp-label">
+          <span class="kp-label-text"><i data-lucide="search"></i> نص الفهرس الدلالي</span>
+          <span class="kp-count" id="count-search-text">0 حرف</span>
+        </label>
+        <textarea id="field-search-text" name="search_text" class="kp-textarea" rows="5"
+          placeholder="النص المستخدم داخلياً للبحث الذكي والرد الآلي عبر البوت...">{{ entity.search_text or '' }}</textarea>
+        <p class="kp-hint">هذا النص هو ما يفهمه الذكاء الاصطناعي فعلياً عند البحث — كلما كان أدق، كانت نتائج البحث أفضل</p>
+      </div>
+
+      <div class="kp-status" id="statusBox"></div>
+
+      <div class="kp-actions">
+        <button type="button" id="generateBtn" class="kp-btn kp-btn-generate"
+          data-url="{% if entity_type == 'lab' %}{{ url_for('generate_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('generate_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
+          <i data-lucide="sparkles" id="genIcon"></i> توليد بالذكاء الاصطناعي
+        </button>
+        <button type="button" id="approveBtn" class="kp-btn kp-btn-approve"
+          data-url="{% if entity_type == 'lab' %}{{ url_for('approve_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('approve_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
+          <i data-lucide="check-circle-2"></i> اعتماد وحفظ المعرفة
+        </button>
+        <a href="{% if entity_type == 'lab' %}{{ url_for('list_labs') }}{% else %}{{ url_for('list_bundles') }}{% endif %}"
+           class="kp-btn kp-btn-ghost">عودة</a>
+      </div>
+    </form>
+  </div>
+
+  <aside class="kp-side">
+    <div class="kp-side-card">
+      <div class="kp-side-title">بيانات {{ 'التحليل' if entity_type == 'lab' else 'الباقة' }}</div>
+      {% if entity_type == 'lab' %}
+      <div class="kp-fact"><span class="kp-fact-label">العينة</span><span class="kp-fact-value">{{ entity.specimen or '—' }}</span></div>
+      <div class="kp-fact"><span class="kp-fact-label">مدة الظهور</span><span class="kp-fact-value">{{ entity.durations or '—' }}</span></div>
+      {% endif %}
+      <div class="kp-fact"><span class="kp-fact-label">السعر</span><span class="kp-fact-value">{{ "%.2f"|format(entity.price or 0.0) }} ج.م</span></div>
+      <div class="kp-fact"><span class="kp-fact-label">تعليمات المريض</span><span class="kp-fact-value" style="font-weight:600;">{{ entity.patient_instructions or 'بدون تعليمات' }}</span></div>
+    </div>
+
+    <div class="kp-side-card">
+      <div class="kp-side-title">ملاحظة</div>
+      <p style="font-size:.85rem;color:var(--ink-soft);line-height:1.7;">
+        لا يتم حفظ أي بيانات في قاعدة البيانات أو الفهرس الدلالي إلا بعد الضغط على «اعتماد وحفظ المعرفة».
+        راجع كل حقل جيداً قبل الاعتماد، خاصة الوصف الطبي.
+      </p>
+    </div>
+  </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const generateBtn = document.getElementById('generateBtn');
+  const approveBtn = document.getElementById('approveBtn');
+  const statusBox = document.getElementById('statusBox');
+  const genIcon = document.getElementById('genIcon');
+
+  const fields = {
+    description: document.getElementById('field-description'),
+    'alias-names': document.getElementById('field-alias-names'),
+    keywords: document.getElementById('field-keywords'),
+    'search-text': document.getElementById('field-search-text'),
+  };
+
+  function updateCount(key) {
+    const el = document.getElementById('count-' + key);
+    if (el) el.textContent = (fields[key].value || '').length + ' حرف';
+  }
+  Object.keys(fields).forEach(key => {
+    updateCount(key);
+    fields[key].addEventListener('input', () => updateCount(key));
+  });
+
+  function setStep(name) {
+    document.querySelectorAll('.kp-step').forEach(el => {
+      const step = el.dataset.step;
+      el.classList.remove('active', 'done');
+      const order = ['generate', 'review', 'approve'];
+      if (order.indexOf(step) < order.indexOf(name)) el.classList.add('done');
+      if (step === name) el.classList.add('active');
+    });
+  }
+  setStep('generate');
+
+  function showStatus(msg, isSuccess) {
+    statusBox.className = 'kp-status ' + (isSuccess ? 'ok' : 'err');
+    statusBox.innerHTML = msg;
+  }
+
+  generateBtn.addEventListener('click', function() {
+    generateBtn.disabled = true;
+    genIcon.classList.add('kp-spin');
+    setStep('generate');
+    showStatus('جاري توليد المعرفة عبر الذكاء الاصطناعي...', true);
+
+    fetch(generateBtn.dataset.url, { method: 'POST' })
+      .then(r => r.json())
+      .then(res => {
+        generateBtn.disabled = false;
+        genIcon.classList.remove('kp-spin');
+        if (res.success && res.data) {
+          fields.description.value = res.data.description || '';
+          fields['alias-names'].value = res.data.alias_names || '';
+          fields.keywords.value = res.data.keywords || '';
+          fields['search-text'].value = res.data.search_text || '';
+          Object.keys(fields).forEach(k => { fields[k].classList.add('ai-filled'); updateCount(k); });
+          setStep('review');
+          showStatus('✨ تم توليد المعرفة — راجع البيانات قبل الاعتماد.', true);
+        } else {
+          showStatus(res.message || 'حدث خطأ أثناء التوليد', false);
+        }
+      })
+      .catch(() => {
+        generateBtn.disabled = false;
+        genIcon.classList.remove('kp-spin');
+        showStatus('فشل الاتصال بخدمة الذكاء الاصطناعي', false);
+      });
+  });
+
+  Object.values(fields).forEach(f => f.addEventListener('input', () => f.classList.remove('ai-filled')));
+
+  approveBtn.addEventListener('click', function() {
+    approveBtn.disabled = true;
+    const payload = {
+      description: fields.description.value,
+      alias_names: fields['alias-names'].value,
+      keywords: fields.keywords.value,
+      search_text: fields['search-text'].value
+    };
+
+    fetch(approveBtn.dataset.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(r => r.json())
+      .then(res => {
+        approveBtn.disabled = false;
+        if (res.success) {
+          setStep('approve');
+          document.querySelector('.kp-step[data-step="approve"]').classList.add('done');
+          showStatus('🎉 ' + res.message, true);
+        } else {
+          showStatus(res.message || 'حدث خطأ أثناء الحفظ', false);
+        }
+      })
+      .catch(() => {
+        approveBtn.disabled = false;
+        showStatus('فشل الاتصال بالخادم أثناء اعتماد البيانات', false);
+      });
+  });
+});
+</script>
+{% endblock %}

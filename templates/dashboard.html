@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}لوحة التحكم - معامل د/ ماجد صفوت شاكر {% endblock %}
+
+{% block topbar_title %}لوحة التحكم المركزية{% endblock %}
+{% block topbar_sub %}متابعة التحاليل، الحجوزات، والروشتات لحظياً{% endblock %}
+
+{% block content %}
+<div class="dashboard-hero">
+  <div class="hero-welcome">
+    <div class="welcome-badge">
+      <span class="pulse-dot"></span>
+      النظام متصل ونشط
+    </div>
+    <h2>أهلاً بك، {{ current_user.username }} 👋</h2>
+    <p>أهلاً بك في منصة إدارة المختبر الآلية. يمكنك متابعة طلبات الروشتات، الحجوزات، وإدارة خدمات المعمل بكل سهولة.</p>
+  </div>
+  <div class="hero-actions">
+    <a href="{{ url_for('list_inquiries') }}" class="btn btn-primary btn-lg">
+      <i data-lucide="file-text"></i>
+      مراجعة الروشتات
+      {% if pending_inquiries_count and pending_inquiries_count > 0 %}
+      <span class="badge-count">{{ pending_inquiries_count }}</span>
+      {% endif %}
+    </a>
+    <a href="{{ url_for('create_lab') }}" class="btn btn-outline btn-lg">
+      <i data-lucide="plus-circle"></i>
+      إضافة تحليل جديد
+    </a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     Subscription Section (NEW)
+     ══════════════════════════════════════════════════════════ -->
+{% if subscription %}
+<div class="section-title">
+  <h3><i data-lucide="shield-check"></i> الاشتراك الحالي</h3>
+</div>
+
+<div class="subscription-card glass-card">
+  <div class="subscription-side subscription-side-status">
+
+    {% if subscription_status.text == "Active" %}
+    <div class="sub-status-badge sub-status-active">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="check-circle-2"></i>
+      الاشتراك مفعل
+    </div>
+    {% elif subscription_status.text == "Limit Reached" %}
+    <div class="sub-status-badge sub-status-grace">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="alert-triangle"></i>
+      داخل فترة السماح
+    </div>
+    {% elif subscription_status.text == "Suspended" %}
+    <div class="sub-status-badge sub-status-suspended">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="ban"></i>
+      الاشتراك موقوف
+    </div>
+    {% else %}
+    <div class="sub-status-badge sub-status-suspended">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="help-circle"></i>
+      لا يوجد اشتراك
+    </div>
+    {% endif %}
+
+    <div class="sub-plan-name">
+      <i data-lucide="crown"></i>
+      خطة {{ subscription.plan_name if subscription.plan_name else 'Professional' }}
+    </div>
+
+    <div class="sub-period">
+      <div class="sub-period-label">
+        <i data-lucide="calendar-range"></i>
+        عرض:
+      </div>
+      <div class="sub-period-dates">
+        <div class="sub-period-item">
+          <span class="sub-period-tag">من</span>
+          <span>{{ subscription.start_date.strftime('%d %b %Y') if subscription.start_date else '—' }}</span>
+        </div>
+        <div class="sub-period-item">
+          <span class="sub-period-tag">إلى</span>
+          <span>{{ subscription.end_date.strftime('%d %b %Y') if subscription.end_date else '—' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="subscription-divider"></div>
+
+  <div class="subscription-side subscription-side-usage">
+    <div class="sub-usage-header">
+      <span class="sub-usage-title">
+        <i data-lucide="activity"></i>
+        الاستخدام
+      </span>
+      <span class="sub-usage-numbers">
+        {{ subscription.message_used }} / {{ subscription.message_limit }}
+      </span>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-bar
+        {% if usage_percentage < 70 %}progress-green
+        {% elif usage_percentage < 90 %}progress-orange
+        {% elif usage_percentage <= 100 %}progress-red
+        {% else %}progress-danger
+        {% endif %}"
+        style="width: {{ usage_percentage if usage_percentage <= 100 else 100 }}%">
+      </div>
+    </div>
+
+    <div class="sub-usage-footer">
+      <span class="sub-usage-percent">{{ usage_percentage }}%</span>
+      <span class="sub-usage-remaining">
+        <i data-lucide="mail"></i>
+        متبقي {{ remaining_messages }} رسالة
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alerts Section ── -->
+<div class="section-title">
+  <h3><i data-lucide="bell-ring"></i> التنبيهات</h3>
+</div>
+
+<div class="alerts-wrapper">
+  {% if subscription_status.text == "Suspended" %}
+  <div class="alert-card alert-red">
+    <div class="alert-icon"><i data-lucide="ban"></i></div>
+    <div class="alert-text">
+      <h4>الاشتراك موقوف</h4>
+      <p>تم إيقاف الاشتراك، يرجى التواصل مع الدعم لإعادة التفعيل.</p>
+    </div>
+  </div>
+  {% elif subscription_status.text == "Limit Reached" %}
+  <div class="alert-card alert-orange">
+    <div class="alert-icon"><i data-lucide="alert-triangle"></i></div>
+    <div class="alert-text">
+      <h4>فترة السماح مفعلة</h4>
+      <p>لقد تجاوزت الحد الأساسي للرسائل، ويتم استخدام رسائل فترة السماح حالياً.</p>
+    </div>
+  </div>
+  {% elif remaining_messages is defined and remaining_messages <= 500 %}
+  <div class="alert-card alert-orange">
+    <div class="alert-icon"><i data-lucide="mail-warning"></i></div>
+    <div class="alert-text">
+      <h4>اقتراب الحد المسموح</h4>
+      <p>تبقى فقط {{ remaining_messages }} رسالة ضمن باقة الاشتراك الحالية.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert-card alert-green">
+    <div class="alert-icon"><i data-lucide="check-circle-2"></i></div>
+    <div class="alert-text">
+      <h4>كل شيء يعمل بشكل طبيعي</h4>
+      <p>الاشتراك مفعل والاستخدام ضمن الحدود الطبيعية.</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Stats Grid -->
+<div class="section-title">
+  <h3><i data-lucide="bar-chart-3"></i> نظرة عامة</h3>
+</div>
+
+<div class="stats-grid">
+
+  <div class="stat-card stat-card-hover">
+    <div class="stat-icon si-amber">
+      <i data-lucide="file-clock"></i>
+    </div>
+    <div class="stat-details">
+      <div class="stat-value">{{ pending_inquiries_count or 0 }}</div>
+      <div class="stat-label">روشتات قيد المراجعة</div>
+      <div class="stat-sub text-amber">تحتاج إلى تأكيد الطبيب</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-card-hover">
+    <div class="stat-icon si-blue">
+      <i data-lucide="calendar-check"></i>
+    </div>
+    <div class="stat-details">
+      <div class="stat-value">مفعل</div>
+      <div class="stat-label">نظام الحجوزات</div>
+      <div class="stat-sub text-blue">متاح عبر واتساب وفيس بوك</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-card-hover">
+    <div class="stat-icon si-green">
+      <i data-lucide="bot"></i>
+    </div>
+    <div class="stat-details">
+      <div class="stat-value">AI Agent</div>
+      <div class="stat-label">مساعد المختبر الذكي</div>
+      <div class="stat-sub text-green">جاهز للرد التلقائي 24/7</div>
+    </div>
+  </div>
+
+  <div class="stat-card stat-card-hover">
+    <div class="stat-icon si-purple">
+      <i data-lucide="flask-conical"></i>
+    </div>
+    <div class="stat-details">
+      <div class="stat-value">نشط</div>
+      <div class="stat-label">قاعدة بيانات التحاليل</div>
+      <div class="stat-sub text-purple">محدثة ومربوطة بالذكاء الاصطناعي</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Quick Shortcuts -->
+<div class="section-title">
+  <h3><i data-lucide="layout-grid"></i> الوصول السريع</h3>
+</div>
+
+<div class="quick-grid">
+
+  <a href="{{ url_for('list_inquiries') }}" class="quick-card">
+    <div class="quick-icon bg-amber">
+      <i data-lucide="file-text"></i>
+    </div>
+    <div class="quick-info">
+      <h4>قائمة الروشتات</h4>
+      <p>عرض الصور المستخرجة بواسطة الذكاء الاصطناعي وتحقق الأطباء</p>
+    </div>
+    <i data-lucide="arrow-left" class="quick-arrow"></i>
+  </a>
+
+  <a href="{{ url_for('list_bookings') }}" class="quick-card">
+    <div class="quick-icon bg-blue">
+      <i data-lucide="calendar"></i>
+    </div>
+    <div class="quick-info">
+      <h4>إدارة الحجوزات</h4>
+      <p>متابعة وتأكيد حجوزات التحاليل المنزلية والزيارات</p>
+    </div>
+    <i data-lucide="arrow-left" class="quick-arrow"></i>
+  </a>
+
+  <a href="{{ url_for('list_labs') }}" class="quick-card">
+    <div class="quick-icon bg-purple">
+      <i data-lucide="clipboard-list"></i>
+    </div>
+    <div class="quick-info">
+      <h4>دليل التحاليل</h4>
+      <p>إضافة وتعديل أسعار التحاليل والشروط والتعليمات الطبية</p>
+    </div>
+    <i data-lucide="arrow-left" class="quick-arrow"></i>
+  </a>
+
+</div>
+{% endblock %}

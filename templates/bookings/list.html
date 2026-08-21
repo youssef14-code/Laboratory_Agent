@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block title %}الحجوزات{% endblock %}
+{% block topbar_title %}الحجوزات{% endblock %}
+{% block topbar_sub %}كل حجوزات المختبر{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('create_booking') }}" class="btn btn-primary">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+    حجز جديد
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">إجمالي الحجوزات</div>
+    <div class="stat-value si-blue">{{ stats.total }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">قيد الانتظار</div>
+    <div class="stat-value si-amber">{{ stats.pending }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">تم الحضور</div>
+    <div class="stat-value si-green">{{ stats.attended }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">لم يحضر</div>
+    <div class="stat-value si-red">{{ stats.no_show }}</div>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <form method="GET" action="{{ url_for('list_bookings') }}" class="toolbar-left">
+    <div class="search-box">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        name="search"
+        placeholder="بحث بالاسم أو رقم الهاتف أو المرجع..."
+        value="{{ search or '' }}"
+        class="search-input"
+      >
+    </div>
+    <select name="status" class="form-control" style="width:auto;">
+      <option value="">كل الحالات</option>
+      {% for s in all_statuses %}
+        <option value="{{ s.value }}" {% if status_filter == s.value %}selected{% endif %}>
+          {{ s.value }}
+        </option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-ghost">بحث</button>
+    {% if search or status_filter %}
+      <a href="{{ url_for('list_bookings') }}" class="btn btn-ghost">مسح</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">قائمة الحجوزات</span>
+    <span class="text-muted" style="font-size:.85rem;">{{ pagination.total }} حجز</span>
+  </div>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>المرجع</th>
+          <th>الاسم</th>
+          <th>رقم الهاتف</th>
+          <th>التاريخ</th>
+          <th>المصدر</th>
+          <th>الحالة</th>
+          <th>الإجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for booking in bookings %}
+        <tr>
+          <td>
+            <code style="
+              background:rgba(99,102,241,.1);
+              color:#818cf8;
+              padding:.2rem .5rem;
+              border-radius:4px;
+              font-size:.85rem;
+            ">#{{ booking.reference_id }}</code>
+          </td>
+          <td><strong>{{ booking.name }}</strong></td>
+          <td>{{ booking.phone_number }}</td>
+          <td class="text-muted">{{ booking.date or '—' }}</td>
+          <td class="text-muted">{{ booking.comes_from or '—' }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('update_booking_status', booking_id=booking.id) }}">
+              <select
+                name="status"
+                class="status-select status-{{ booking.status.value | lower | replace(' ', '-') }}"
+                onchange="this.form.submit()"
+              >
+                {% for s in all_statuses %}
+                  <option value="{{ s.value }}" {% if booking.status == s %}selected{% endif %}>
+                    {{ s.value }}
+                  </option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td>
+           <div style="display:flex;gap:.5rem;">
+  <a href="{{ url_for('view_booking', booking_id=booking.id) }}" class="btn btn-ghost btn-sm">
+    عرض
+  </a>
+
+  <form method="POST"
+        action="{{ url_for('delete_booking', booking_id=booking.id) }}"
+        onsubmit="return confirm('هل أنت متأكد من حذف هذا الحجز؟')">
+    <button type="submit" class="btn btn-danger btn-sm">
+      حذف
+    </button>
+  </form>
+</div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
+            {% if search or status_filter %}
+              لا توجد حجوزات تطابق البحث
+            {% else %}
+              لا توجد حجوزات بعد — <a href="{{ url_for('create_booking') }}" style="color:var(--primary);">أضف أول حجز</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if pagination.pages > 1 %}
+  <div class="pagination">
+    {% if pagination.has_prev %}
+      <a href="{{ url_for('list_bookings', page=pagination.prev_num, search=search, status=status_filter) }}" class="btn btn-ghost btn-sm">السابق</a>
+    {% endif %}
+    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+        <a href="{{ url_for('list_bookings', page=p, search=search, status=status_filter) }}"
+           class="btn btn-sm {% if p == pagination.page %}btn-primary{% else %}btn-ghost{% endif %}">{{ p }}</a>
+      {% else %}
+        <span style="padding:.25rem .5rem;color:var(--text-muted);">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+      <a href="{{ url_for('list_bookings', page=pagination.next_num, search=search, status=status_filter) }}" class="btn btn-ghost btn-sm">التالي</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,26 +1,16 @@
 """
-software_services/booking_service.py
+software_services/homevisit_service.py
 """
 
 import uuid
-from dataclasses import dataclass
+
 from datetime import datetime, timezone
 
 from models.models import Homevisit, Status, db
+from software_service.base_service import BaseService
 
 
-# ── result dataclass ──────────────────────────────────────────────────────────
-
-@dataclass
-class homevisitResult:
-    success: bool
-    visit: object
-    message: str
-
-
-# ── service ───────────────────────────────────────────────────────────────────
-
-class homevisitService:
+class HomeVisitService(BaseService):
 
     # ── list / search ─────────────────────────────────────────────────────────
 
@@ -44,8 +34,7 @@ class homevisitService:
                 pass
 
         query = query.order_by(Homevisit.booking_time.desc())
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        return pagination, "تم العثور على الحجوزات"
+        return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الحجوزات")
 
     # ── single ────────────────────────────────────────────────────────────────
 
@@ -54,7 +43,7 @@ class homevisitService:
         visit = db.session.get(Homevisit, visit_id)
         if not visit:
             return None, "الحجز غير موجود"
-        return  visit, "تم العثور على الحجز"
+        return visit, "تم العثور على الحجز"
 
     @staticmethod
     def get_visit_by_reference(reference_id):
@@ -63,67 +52,42 @@ class homevisitService:
             return None, "الحجز غير موجود"
         return visit, "تم العثور على الحجز"
 
-    # ── create ────────────────────────────────────────────────────────────────
-
+    # ── helper function ────────────────────────────────────────────────────────────────
     @staticmethod
-    def create_visit(name, phone_number, date=None, details=None, comes_from=None,address=None, time=None):
+    def _build_visit(name, phone_number, date, details, comes_from, address):
+        return Homevisit(
+            reference_id=uuid.uuid4().hex[:12].upper(),
+            name=name.strip(),
+            phone_number=phone_number.strip(),
+            date=date,
+            details=details,
+            comes_from=comes_from,
+            status=Status.PENDING,
+            booking_time=datetime.now(timezone.utc),
+            address=address
+        )
+    # ── create ────────────────────────────────────────────────────────────────
+    @staticmethod
+    def create_visit(name, phone_number, date, details, comes_from, address):
         if not name or not name.strip():
-            return homevisitResult(False, None, "اسم المريض مطلوب")
+            return None, "اسم المريض مطلوب"
         if not phone_number or not phone_number.strip():
-            return homevisitResult(False, None, "رقم الهاتف مطلوب")
-        reference_id = uuid.uuid4().hex[:12].upper()
-
-        try:
-            visit = Homevisit(
-                reference_id=reference_id,
-                name=name.strip(),
-                phone_number=phone_number.strip(),
-                date=date,
-                details=details,
-                comes_from=comes_from,
-                status=Status.PENDING,
-                booking_time=datetime.now(timezone.utc),
-                address=address,
-                time=time,
-
-            )
-            db.session.add(visit)
-            db.session.commit()
-            return homevisitResult(True, visit, "تم إنشاء الحجز بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            from sqlalchemy.exc import IntegrityError
-            if isinstance(e, IntegrityError):
-                
-                reference_id = uuid.uuid4().hex[:12].upper()
-                try:
-                    visit = Homevisit(
-                        reference_id=reference_id,
-                        name=name.strip(),
-                        phone_number=phone_number.strip(),
-                        date=date,
-                        details=details,
-                        comes_from=comes_from,
-                        status=Status.PENDING,
-                        booking_time=datetime.now(timezone.utc),
-                        address=address,
-
-                    )
-                    db.session.add(visit)
-                    db.session.commit()
-                    return homevisitResult(True, visit, "تم إنشاء الحجز بنجاح")
-                except Exception as ex:
-                    db.session.rollback()
-                    return homevisitResult(False, None, f"حدث خطأ أثناء إنشاء الحجز: {str(ex)}")
-            return homevisitResult(False, None, f"حدث خطأ أثناء إنشاء الحجز: {str(e)}")
-
+            return None, "رقم الهاتف مطلوب"
+        if not address or not address.strip():
+            return None, "العنوان مطلوب"
+        visit = HomeVisitService._build_visit(name, phone_number, date, details, comes_from, address)
+        res, msg = BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
+        if res is None:
+            visit = HomeVisitService._build_visit(name, phone_number, date, details, comes_from, address)
+            return BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
+        return res, msg
     # ── update ────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def update_visit(visit_id, name=None, phone_number=None, date=None, details=None, address=None,time=None):
+    def update_visit(visit_id, name=None, phone_number=None, date=None, details=None, address=None):
         visit = db.session.get(Homevisit, visit_id)
         if not visit:
-            return homevisitResult(False, None, "الحجز غير موجود")
+            return None, "الحجز غير موجود"
 
         if name is not None:
             visit.name = name.strip()
@@ -134,24 +98,14 @@ class homevisitService:
         if details is not None:
             visit.details = details
         if address is not None:
-            visit.address = address
-        if time is not None:
-            visit.time = time    
-
-        # أي تعديل على الحجز يرجّعه Pending تلقائي، مهما كانت حالته قبل كده
+            visit.address = address   
+        # أي تعديل على الحجز يرجّعه Pending تلقائي
         visit.status = Status.PENDING
 
-        try:
-            db.session.commit()
-            return homevisitResult(True, visit, "تم تحديث الحجز بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return homevisitResult(False, None, f"حدث خطأ أثناء تحديث الحجز: {str(e)}")
+        return BaseService.update_commit(visit, success_msg="تم تحديث الحجز بنجاح", error_prefix="حدث خطأ أثناء تحديث الحجز")
+
     # ── status ────────────────────────────────────────────────────────────────
 
-    # homevisit_service.py
-
-    
     @staticmethod
     def get_latest_booking(sender_id: str, page_id: str = None):
         query = db.session.query(Homevisit).filter(
@@ -162,23 +116,19 @@ class homevisitService:
                 Homevisit.comes_from.like(f"%:{sender_id}:{page_id}")
             )
         return query.order_by(Homevisit.booking_time.desc()).first()
-    
 
     @staticmethod
     def update_status(visit_id, new_status: str):
         visit = db.session.get(Homevisit, visit_id)
         if not visit:
-            return homevisitResult(False, None, "الحجز غير موجود")
+            return None, "الحجز غير موجود"
 
         try:
             visit.status = Status(new_status)
-            db.session.commit()
-            return homevisitResult(True,visit, "تم تحديث الحالة بنجاح")
         except ValueError:
-            return homevisitResult(False, None, "حالة غير صحيحة")
-        except Exception as e:
-            db.session.rollback()
-            return homevisitResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "حالة غير صحيحة"
+
+        return BaseService.update_commit(visit, success_msg="تم تحديث الحالة بنجاح", error_prefix="حدث خطأ أثناء تحديث الحالة")
 
     # ── delete ────────────────────────────────────────────────────────────────
 
@@ -186,27 +136,25 @@ class homevisitService:
     def delete_visit(visit_id):
         visit = db.session.get(Homevisit, visit_id)
         if not visit:
-            return homevisitResult(False, None, "الحجز غير موجود")
+            return None, "الحجز غير موجود"
 
-        try:
-            db.session.delete(visit)
-            db.session.commit()
-            return homevisitResult(True, visit, "تم حذف الحجز بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return homevisitResult(False, None, f"حدث خطأ أثناء الحذف: {str(e)}")
+        return BaseService.delete(visit, success_msg="تم حذف الحجز بنجاح", error_prefix="حدث خطأ أثناء الحذف")
 
     # ── stats (for dashboard) ─────────────────────────────────────────────────
 
     @staticmethod
     def get_stats():
-        total      = Homevisit.query.count()
-        pending    = Homevisit.query.filter_by(status=Status.PENDING).count()
-        done  = Homevisit.query.filter_by(status=Status.DONE).count()
-        no_show    = Homevisit.query.filter_by(status=Status.NO_SHOW).count()
+        total   = Homevisit.query.count()
+        pending = Homevisit.query.filter_by(status=Status.PENDING).count()
+        done    = Homevisit.query.filter_by(status=Status.DONE).count()
+        no_show = Homevisit.query.filter_by(status=Status.NO_SHOW).count()
         return {
-            "total":    total,
-            "pending":  pending,
-            "done": done,
-            "no_show":  no_show,
+            "total":   total,
+            "pending": pending,
+            "done":    done,
+            "no_show": no_show,
         }
+
+
+# Backward compatibility alias
+homevisitService = HomeVisitService

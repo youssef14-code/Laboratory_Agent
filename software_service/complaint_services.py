@@ -2,24 +2,13 @@
 software_services/complaint_service.py
 """
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from models.models import Complaint, Status, db
+from software_service.base_service import BaseService
 
 
-# ── result dataclass ──────────────────────────────────────────────────────────
-
-@dataclass
-class ComplaintResult:
-    success: bool
-    complaint: object
-    message: str
-
-
-# ── service ───────────────────────────────────────────────────────────────────
-
-class ComplaintService:
+class ComplaintService(BaseService):
 
     # ── read ──────────────────────────────────────────────────────────────────
 
@@ -43,28 +32,27 @@ class ComplaintService:
                 pass
 
         query = query.order_by(Complaint.created_at.desc())
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        return pagination, "تم العثور على الشكاوى"
+        return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الشكاوى")
 
     @staticmethod
     def get_complaint_by_id(complaint_id):
         complaint = db.session.get(Complaint, complaint_id)
         if not complaint:
-            return ComplaintResult(False, None, "الشكوى غير موجودة")
-        return ComplaintResult(True, complaint, "تم العثور على الشكوى")
+            return None, "الشكوى غير موجودة"
+        return complaint, "تم العثور على الشكوى"
 
     # ── stats ─────────────────────────────────────────────────────────────────
 
     @staticmethod
     def get_stats():
-        total    = Complaint.query.count()
-        pending  = Complaint.query.filter_by(status=Status.PENDING).count()
-        done= Complaint.query.filter_by(status=Status.DONE).count()
+        total     = Complaint.query.count()
+        pending   = Complaint.query.filter_by(status=Status.PENDING).count()
+        done      = Complaint.query.filter_by(status=Status.DONE).count()
         confirmed = Complaint.query.filter_by(status=Status.CONFIRMED).count()
         return {
-            "total":    total,
-            "pending":  pending,
-            "done": done,
+            "total":     total,
+            "pending":   pending,
+            "done":      done,
             "confirmed": confirmed,
         }
 
@@ -74,47 +62,35 @@ class ComplaintService:
     def update_status(complaint_id, new_status: str):
         complaint = db.session.get(Complaint, complaint_id)
         if not complaint:
-            return ComplaintResult(False, None, "الشكوى غير موجودة")
+            return None, "الشكوى غير موجودة"
+
         try:
             complaint.status = Status(new_status)
-            db.session.commit()
-            return ComplaintResult(True, complaint, "تم تحديث الحالة بنجاح")
         except ValueError:
-            return ComplaintResult(False, None, "حالة غير صحيحة")
-        except Exception as e:
-            db.session.rollback()
-            return ComplaintResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "حالة غير صحيحة"
+
+        return BaseService.update_commit(complaint, success_msg="تم تحديث الحالة بنجاح", error_prefix="حدث خطأ أثناء تحديث الحالة")
 
     @staticmethod
     def delete_complaint(complaint_id):
         complaint = db.session.get(Complaint, complaint_id)
         if not complaint:
-            return ComplaintResult(False, None, "الشكوى غير موجودة")
-        try:
-            db.session.delete(complaint)
-            db.session.commit()
-            return ComplaintResult(True, None, "تم حذف الشكوى بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return ComplaintResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "الشكوى غير موجودة"
+
+        return BaseService.delete(complaint, success_msg="تم حذف الشكوى بنجاح", error_prefix="حدث خطأ أثناء الحذف")
 
     @staticmethod
     def create_complaint(phone_number, complaint_text, comes_from=None):
         if not phone_number or not phone_number.strip():
-            return ComplaintResult(False, None, "رقم الهاتف مطلوب")
+            return None, "رقم الهاتف مطلوب"
         if not complaint_text or not complaint_text.strip():
-            return ComplaintResult(False, None, "نص الشكوى مطلوب")
-        try:
-            complaint = Complaint(
-                phone_number=phone_number.strip(),
-                complaint_text=complaint_text.strip(),
-                comes_from=comes_from,
-                status=Status.PENDING,
-                created_at=datetime.now(timezone.utc),
-            )
-            db.session.add(complaint)
-            db.session.commit()
-            return ComplaintResult(True, complaint, "تم تسجيل الشكوى بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return ComplaintResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "نص الشكوى مطلوب"
+
+        complaint = Complaint(
+            phone_number=phone_number.strip(),
+            complaint_text=complaint_text.strip(),
+            comes_from=comes_from,
+            status=Status.PENDING,
+            created_at=datetime.now(timezone.utc),
+        )
+        return BaseService.commit(complaint, success_msg="تم تسجيل الشكوى بنجاح", error_prefix="حدث خطأ أثناء تسجيل الشكوى")
