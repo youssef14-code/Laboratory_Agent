@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}إضافة مستخدم{% endblock %}
+
+{% block topbar_title %}
+إضافة مستخدم
+{% endblock %}
+
+{% block content %}
+
+<form method="POST" class="card">
+
+    <div class="form-group">
+        <label>اسم المستخدم</label>
+
+        <input
+            type="text"
+            name="name"
+            class="form-control"
+            required>
+    </div>
+
+    <br>
+
+    <div class="form-group">
+
+        <label>كلمة المرور</label>
+
+        <input
+            type="password"
+            name="password"
+            class="form-control"
+            required>
+
+    </div>
+
+    <br>
+
+    <button class="btn btn-primary">
+        حفظ
+    </button>
+
+    <a href="{{ url_for('users') }}"
+       class="btn btn-secondary">
+        رجوع
+    </a>
+
+</form>
+
+{% endblock %}

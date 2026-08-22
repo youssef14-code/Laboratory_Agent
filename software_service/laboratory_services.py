@@ -1,17 +1,19 @@
 from models.models import Laboratory, db
 from software_service.base_service import BaseService
 
-class LaboratoryService:
+class LaboratoryService(BaseService):
 
     @staticmethod
     def get_current_laboratory_id():
         """Get default laboratory ID or create a default lab record if none exists."""
         lab = Laboratory.query.first()
-        if not lab:
-            lab = Laboratory(name="المعمل الرئيسي", info="معمل تحاليل رئيسي")
-            db.session.add(lab)
-            db.session.commit()
-        return lab.id
+        if lab:
+            return lab.id
+        new_lab = Laboratory(name="المعمل الرئيسي", info="معمل تحاليل رئيسي")
+        saved_lab, msg = BaseService.commit(new_lab, success_msg="تم إنشاء المعمل الافتراضي", error_prefix="حدث خطأ أثناء إنشاء المعمل الافتراضي")
+        if not saved_lab:
+            raise ValueError(msg)
+        return saved_lab.id
 
     @staticmethod
     def get_all_laboratories(page=1, per_page=10, search=None):
@@ -30,7 +32,7 @@ class LaboratoryService:
     @staticmethod
     def get_laboratory_by_id(lab_id):
         """Get a single laboratory by ID."""
-        lab = Laboratory.query.get(lab_id)
+        lab = db.session.get(Laboratory, lab_id)
         if not lab:
             return None, "المعمل غير موجود"
         return lab, "تم العثور على المعمل"
@@ -43,14 +45,14 @@ class LaboratoryService:
 
         lab = Laboratory(
             name=name.strip(),
-            info=info.strip() if info else None
+            info=info.strip() if info else ""
         )
         return BaseService.commit(lab, success_msg="تم إضافة المعمل بنجاح", error_prefix="حدث خطأ أثناء الإضافة")
 
     @staticmethod
     def update_laboratory(lab_id, name=None, info=None):
         """Update an existing laboratory."""
-        lab = Laboratory.query.get(lab_id)
+        lab = db.session.get(Laboratory, lab_id)
         if not lab:
             return None, "المعمل غير موجود"
 
@@ -65,7 +67,7 @@ class LaboratoryService:
     @staticmethod
     def delete_laboratory(lab_id):
         """Delete a laboratory."""
-        lab = Laboratory.query.get(lab_id)
+        lab = db.session.get(Laboratory, lab_id)
         if not lab:
             return None, "المعمل غير موجود"
 

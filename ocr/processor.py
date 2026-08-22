@@ -140,7 +140,7 @@ def process_prescription_ocr(
         )
 
         try:
-            db_result = InquiryService.save_inquiry(
+            inquiry_obj, db_message = InquiryService.save_inquiry(
                 laboratory_id=laboratory_id,
                 phone_number=phone_number,
                 comes_from=comes_from,
@@ -156,15 +156,15 @@ def process_prescription_ocr(
             )
             raise
 
-        if not db_result.success:
+        if inquiry_obj is None:
             logger.error(
                 "[OCR Processor] InquiryService reported failure | message=%s",
-                getattr(db_result, "message", None),
+                db_message,
             )
         else:
             logger.info(
                 "[OCR Processor] inquiry saved | inquiry_id=%s",
-                db_result.inquiry.id if db_result.inquiry else None,
+                inquiry_obj.id,
             )
 
         return {
@@ -176,12 +176,8 @@ def process_prescription_ocr(
                 (lab.get("standardized_name") or lab.get("matched_text", "")) if isinstance(lab, dict) else str(lab)
                 for lab in labs
             ],
-            "inquiry_id": (
-                db_result.inquiry.id
-                if db_result.success and db_result.inquiry
-                else None
-            ),
-            "ocr_usage": ocr.get("ocr_usage"),
+            "inquiry_id":         inquiry_obj.id if inquiry_obj else None,
+            "ocr_usage":          ocr.get("ocr_usage"),
             "message": (
                 f"Prescription parsed successfully "
                 f"(confidence={overall_confidence}%)."
@@ -195,7 +191,7 @@ def process_prescription_ocr(
     )
 
     try:
-        db_result = InquiryService.save_inquiry(
+        inquiry_obj, db_message = InquiryService.save_inquiry(
             laboratory_id=laboratory_id,
             phone_number=phone_number,
             comes_from=comes_from,
@@ -212,15 +208,15 @@ def process_prescription_ocr(
         )
         raise
 
-    if not db_result.success:
+    if inquiry_obj is None:
         logger.error(
             "[OCR Processor] InquiryService reported failure (manual review) | message=%s",
-            getattr(db_result, "message", None),
+            db_message,
         )
     else:
         logger.info(
             "[OCR Processor] inquiry saved for manual review | inquiry_id=%s",
-            db_result.inquiry.id if db_result.inquiry else None,
+            inquiry_obj.id,
         )
 
     return {
@@ -229,14 +225,11 @@ def process_prescription_ocr(
         "confidence":         overall_confidence,
         "extracted_text":     "",
         "services_mentioned": [],
-        "inquiry_id": (
-            db_result.inquiry.id
-            if db_result.success and db_result.inquiry
-            else None
-        ),
-        "ocr_usage": ocr.get("ocr_usage"),
+        "inquiry_id":         inquiry_obj.id if inquiry_obj else None,
+        "ocr_usage":          ocr.get("ocr_usage"),
         "message": (
             f"Prescription saved for manual review "
             f"(confidence={overall_confidence}% < threshold {CONFIDENCE_THRESHOLD}%)."
         ),
     }
+

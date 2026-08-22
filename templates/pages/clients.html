@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}عملاء الصفحة{% endblock %}
+{% block topbar_title %}عملاء الصفحة{% endblock %}
+{% block topbar_sub %}{{ page.page_id }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('list_pages') }}" class="btn btn-ghost">رجوع للصفحات</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <form method="GET" action="{{ url_for('list_clients', platform_id=page.platform_id, page_id=page.page_id) }}" class="toolbar">
+      <div class="search-box">
+        <input type="text" name="search" value="{{ search or '' }}" placeholder="بحث برقم العميل...">
+      </div>
+      <button type="submit" class="btn btn-ghost">بحث</button>
+    </form>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>رقم العميل</th>
+          <th>ملخص المحادثة</th>
+          <th>آخر رد من البوت</th>
+          <th>تاريخ الانتهاء</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for client in clients.items %}
+        <tr>
+          <td>{{ client.sender_id }}</td>
+          <td class="complaint-text-cell" title="{{ client.summary }}">
+            {{ (client.summary or '-')[:60] }}{% if client.summary and client.summary|length > 60 %}...{% endif %}
+          </td>
+          <td class="complaint-text-cell" title="{{ client.last_bot_message }}">
+            {{ (client.last_bot_message or '-')[:60] }}{% if client.last_bot_message and client.last_bot_message|length > 60 %}...{% endif %}
+          </td>
+          <td>{{ client.expiration_date.strftime('%Y-%m-%d %H:%M') if client.expiration_date else '-' }}</td>
+          <td class="actions-cell">
+            <a href="{{ url_for('edit_client', platform_id=page.platform_id, page_id=page.page_id, sender_id=client.sender_id) }}" class="btn btn-ghost btn-sm">تعديل الملخص</a>
+            <form action="{{ url_for('delete_client', platform_id=page.platform_id, page_id=page.page_id, sender_id=client.sender_id) }}" method="POST" class="inline-form" onsubmit="return confirm('هل أنت متأكد من حذف هذا العميل؟');">
+              <button type="submit" class="btn btn-danger btn-sm">حذف</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="empty-row">لا يوجد عملاء لهذه الصفحة حتى الآن</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if clients.pages > 1 %}
+  <div class="pagination">
+    {% if clients.has_prev %}
+      <a href="{{ url_for('list_clients', platform_id=page.platform_id, page_id=page.page_id, page=clients.prev_num, search=search) }}" class="btn btn-ghost btn-sm">السابق</a>
+    {% endif %}
+    <span class="page-info">صفحة {{ clients.page }} من {{ clients.pages }}</span>
+    {% if clients.has_next %}
+      <a href="{{ url_for('list_clients', platform_id=page.platform_id, page_id=page.page_id, page=clients.next_num, search=search) }}" class="btn btn-ghost btn-sm">التالي</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

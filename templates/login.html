@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تسجيل الدخول — معامل د/ ماجد صفوت شاكر للتحاليل الطبية</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    /* ── Login page override ── */
+    body {
+      background: var(--bg-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: 'Cairo', sans-serif;
+    }
+
+    .login-wrapper {
+      display: flex;
+      width: 100%;
+      max-width: 960px;
+      min-height: 560px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+      margin: 24px;
+    }
+
+    /* ── Left panel (brand) ── */
+    .login-brand-panel {
+      flex: 1;
+      background: linear-gradient(145deg, #1e2a4a 0%, #16213e 60%, #0d1b35 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-brand-panel::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      left: -80px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .login-brand-panel::after {
+      content: '';
+      position: absolute;
+      bottom: -60px;
+      right: -60px;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    /* Faint grid texture so the panel doesn't feel empty, without competing with the logo */
+    .login-brand-panel .brand-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(circle at 50% 45%, black 0%, transparent 72%);
+      pointer-events: none;
+    }
+
+    /* ── الشعار ── */
+    .brand-icon {
+      width: 168px;
+      height: 168px;
+      background: transparent;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+      animation: brand-in 0.6s ease-out;
+    }
+
+    @keyframes brand-in {
+      from { opacity: 0; transform: translateY(8px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .brand-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.4));
+    }
+
+    .brand-tagline {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.55);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      line-height: 1.7;
+      max-width: 260px;
+    }
+
+    .brand-divider {
+      width: 40px;
+      height: 3px;
+      background: linear-gradient(90deg, #6366f1, #818cf8);
+      border-radius: 2px;
+      margin: 18px auto 22px auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-features {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 32px;
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 240px;
+    }
+
+    .brand-feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255,255,255,0.68);
+      font-size: 0.84rem;
+    }
+
+    .brand-feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #818cf8;
+      box-shadow: 0 0 8px rgba(129,140,248,0.7);
+      flex-shrink: 0;
+    }
+
+    /* ── Right panel (form) ── */
+    .login-form-panel {
+      flex: 1;
+      background: var(--bg-card);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 48px;
+    }
+
+    .login-form-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .login-form-sub {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 36px;
+    }
+
+    .login-field {
+      margin-bottom: 20px;
+    }
+
+    .login-field label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap svg {
+      position: absolute;
+      top: 50%;
+      right: 14px;
+      transform: translateY(-50%);
+      width: 17px;
+      height: 17px;
+      color: var(--text-muted);
+      pointer-events: none;
+      transition: color 0.2s;
+    }
+
+    /* Slightly stronger fill + visible border so fields read as clickable, not disabled */
+    .login-input {
+      width: 100%;
+      padding: 12px 42px 12px 16px;
+      background: var(--bg-main);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.9rem;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      box-sizing: border-box;
+    }
+
+    .login-input:hover {
+      border-color: rgba(99,102,241,0.4);
+    }
+
+    .login-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+
+    .login-input:focus + svg,
+    .input-wrap:focus-within svg {
+      color: #6366f1;
+    }
+
+    .login-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.6;
+    }
+
+    /* Password visibility toggle */
+    .pw-toggle {
+      position: absolute;
+      top: 50%;
+      right: 14px;
+      transform: translateY(-50%);
+      width: 17px;
+      height: 17px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+
+    .pw-toggle:hover { color: #6366f1; }
+    .pw-toggle svg { width: 17px; height: 17px; }
+
+    /* Row: remember me + forgot password */
+    .login-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      margin: -6px 0 22px 0;
+      font-size: 0.8rem;
+    }
+
+    .remember-me {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .remember-me input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-main);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .remember-me input[type="checkbox"]:checked {
+      background: #6366f1;
+      border-color: #6366f1;
+    }
+
+    .remember-me input[type="checkbox"]:checked::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      width: 4px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 1.5px 1.5px 0;
+      transform: rotate(45deg);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+    }
+
+    .login-btn:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+    }
+
+    .login-btn:active {
+      transform: translateY(0);
+    }
+
+    .login-btn:focus-visible {
+      outline: 2px solid #a5b4fc;
+      outline-offset: 2px;
+    }
+
+    .login-btn .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      display: none;
+      animation: spin 0.7s linear infinite;
+    }
+
+    .login-btn.is-loading .spinner { display: inline-block; }
+    .login-btn.is-loading .btn-label { opacity: 0.85; }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Flash messages */
+    .flash-error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: #f87171;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .flash-error svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .brand-icon { animation: none; }
+      .login-btn, .login-input { transition: none; }
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .login-brand-panel { display: none; }
+      .login-wrapper { max-width: 420px; border-radius: 16px; }
+      .login-form-panel { padding: 40px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-wrapper">
+
+  <!-- Brand Panel -->
+  <div class="login-brand-panel">
+    <div class="brand-grid"></div>
+
+    <div class="brand-icon">
+      <img src="{{ url_for('static', filename='images/logo (2).png') }}" alt="معامل د/ ماجد صفوت شاكر للتحاليل الطبية">
+    </div>
+
+    <div class="brand-divider"></div>
+    <div class="brand-tagline">نظام إدارة متكامل للحجوزات<br>والاستفسارات والخدمات المخبرية</div>
+
+    <div class="brand-features">
+      <div class="brand-feature">
+        <span class="brand-feature-dot"></span>
+        إدارة الحجوزات والاستفسارات
+      </div>
+      <div class="brand-feature">
+        <span class="brand-feature-dot"></span>
+        تحليل الوصفات بالذكاء الاصطناعي
+      </div>
+      <div class="brand-feature">
+        <span class="brand-feature-dot"></span>
+        تكامل مع منصات التواصل الاجتماعي
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Panel -->
+  <div class="login-form-panel">
+    <div class="login-form-title">مرحباً بك 👋</div>
+    <div class="login-form-sub">سجّل دخولك للمتابعة إلى لوحة التحكم</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash-error" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+          </svg>
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}" id="loginForm">
+      <div class="login-field">
+        <label for="username">اسم المستخدم</label>
+        <div class="input-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+          </svg>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            class="login-input"
+            placeholder="أدخل اسم المستخدم"
+            autocomplete="username"
+            required
+          >
+        </div>
+      </div>
+
+      <div class="login-field">
+        <label for="password">كلمة المرور</label>
+        <div class="input-wrap">
+          <input
+            id="password"
+            name="password"
+            type="password"
+            class="login-input"
+            placeholder="أدخل كلمة المرور"
+            autocomplete="current-password"
+            required
+          >
+          <button type="button" class="pw-toggle" id="pwToggle" aria-label="إظهار كلمة المرور">
+            <svg id="pwIconShow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <svg id="pwIconHide" style="display:none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.847 0 1.663-.1 2.443-.288M6.228 6.228A10.451 10.451 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="login-row">
+        <label class="remember-me">
+          <input type="checkbox" name="remember" id="remember">
+          تذكرني
+        </label>
+      </div>
+
+      <button type="submit" class="login-btn" id="loginBtn">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="btn-label">تسجيل الدخول</span>
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  // Password visibility toggle
+  const pwInput = document.getElementById('password');
+  const pwToggle = document.getElementById('pwToggle');
+  const pwIconShow = document.getElementById('pwIconShow');
+  const pwIconHide = document.getElementById('pwIconHide');
+
+  pwToggle.addEventListener('click', () => {
+    const isPassword = pwInput.type === 'password';
+    pwInput.type = isPassword ? 'text' : 'password';
+    pwIconShow.style.display = isPassword ? 'none' : 'block';
+    pwIconHide.style.display = isPassword ? 'block' : 'none';
+    pwToggle.setAttribute('aria-label', isPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور');
+  });
+
+  // Loading state on submit (native form submit still proceeds normally)
+  const form = document.getElementById('loginForm');
+  const loginBtn = document.getElementById('loginBtn');
+  form.addEventListener('submit', () => {
+    loginBtn.classList.add('is-loading');
+    loginBtn.disabled = true;
+  });
+</script>
+
+</body>
+</html>

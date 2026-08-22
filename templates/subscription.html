@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة الاشتراك - معامل د/ ماجد صفوت شاكر {% endblock %}
+
+{% block topbar_title %}إدارة الاشتراك{% endblock %}
+{% block topbar_sub %}متابعة الباقة، الاستخدام، والتحكم الكامل في خدمة الذكاء الاصطناعي{% endblock %}
+
+{% block content %}
+
+{% set used_over_limit = (subscription.message_used - subscription.message_limit) if subscription.message_used > subscription.message_limit else 0 %}
+{% set grace_remaining = (subscription.grace_limit - used_over_limit) if subscription.grace_limit > used_over_limit else 0 %}
+{% set usage_display = [usage, 100] | min %}
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 1 — Subscription Summary
+     ══════════════════════════════════════════════════════════ -->
+<div class="section-title">
+  <h3><i data-lucide="shield-check"></i> ملخص الاشتراك</h3>
+</div>
+
+<div class="card glass-card summary-card">
+  <div class="summary-top">
+    {% if status.color == "success" %}
+    <div class="sub-status-badge sub-status-active">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="check-circle-2"></i>
+      الاشتراك مفعل
+    </div>
+    {% elif status.color == "warning" %}
+    <div class="sub-status-badge sub-status-grace">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="alert-triangle"></i>
+      تم الوصول للحد الأقصى
+    </div>
+    {% else %}
+    <div class="sub-status-badge sub-status-suspended">
+      <span class="sub-status-dot"></span>
+      <i data-lucide="ban"></i>
+      الاشتراك موقوف
+    </div>
+    {% endif %}
+
+    <div class="sub-plan-name">
+      <i data-lucide="crown"></i>
+      خطة {{ subscription.plan_name if subscription.plan_name else 'Professional' }}
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="info-icon si-blue"><i data-lucide="calendar"></i></div>
+      <div class="info-body">
+        <div class="info-label">تاريخ البدء</div>
+        <div class="info-value">{{ subscription.start_date.strftime('%d %b %Y') if subscription.start_date else '—' }}</div>
+      </div>
+    </div>
+
+    <div class="info-item">
+      <div class="info-icon si-purple"><i data-lucide="calendar-x"></i></div>
+      <div class="info-body">
+        <div class="info-label">تاريخ الانتهاء</div>
+        <div class="info-value">{{ subscription.end_date.strftime('%d %b %Y') if subscription.end_date else '—' }}</div>
+      </div>
+    </div>
+
+    <div class="info-item">
+      <div class="info-icon si-green"><i data-lucide="repeat"></i></div>
+      <div class="info-body">
+        <div class="info-label">عدد مرات التجديد</div>
+        <div class="info-value">{{ subscription.renew_count or 0 }}</div>
+      </div>
+    </div>
+
+    <div class="info-item">
+      <div class="info-icon si-amber"><i data-lucide="dollar-sign"></i></div>
+      <div class="info-body">
+        <div class="info-label">التكلفة التقديرية</div>
+        <div class="info-value">${{ '%.2f'|format(subscription.estimated_cost or 0) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 2 — Usage
+     ══════════════════════════════════════════════════════════ -->
+<div class="section-title">
+  <h3><i data-lucide="activity"></i> استخدام الرسائل</h3>
+</div>
+
+<div class="card glass-card usage-card">
+  <div class="sub-usage-header usage-header-lg">
+    <span class="sub-usage-title">
+      <i data-lucide="gauge"></i>
+      الاستخدام الحالي
+    </span>
+    <span class="sub-usage-numbers usage-numbers-lg">
+      {{ subscription.message_used }} / {{ subscription.message_limit }}
+    </span>
+  </div>
+
+  <div class="progress-track progress-track-lg">
+    <div class="progress-bar
+      {% if usage < 70 %}progress-green
+      {% elif usage < 90 %}progress-orange
+      {% elif usage <= 100 %}progress-red
+      {% else %}progress-danger
+      {% endif %}"
+      style="width: {{ usage_display }}%">
+    </div>
+  </div>
+
+  <div class="usage-stats-grid">
+    <div class="usage-stat">
+      <div class="usage-stat-icon si-blue"><i data-lucide="mail"></i></div>
+      <div class="usage-stat-value">{{ remaining }}</div>
+      <div class="usage-stat-label">رسالة متبقية</div>
+    </div>
+
+    <div class="usage-stat">
+      <div class="usage-stat-icon si-purple"><i data-lucide="shield-plus"></i></div>
+      <div class="usage-stat-value">{{ grace_remaining }}</div>
+      <div class="usage-stat-label">رسائل فترة السماح</div>
+    </div>
+
+    <div class="usage-stat">
+      <div class="usage-stat-icon si-amber"><i data-lucide="percent"></i></div>
+      <div class="usage-stat-value">{{ usage }}%</div>
+      <div class="usage-stat-label">نسبة الاستخدام</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 3 & 4 & 5 — Renew / Limits
+     ══════════════════════════════════════════════════════════ -->
+<div class="section-title">
+  <h3><i data-lucide="settings-2" ></i> إعدادات الباقة</h3>
+</div>
+
+<div class="settings-grid">
+
+  <!-- Section 3 — Renew Subscription -->
+  <div class="card glass-card action-card">
+    <div class="card-header">
+      <span class="card-title">
+        <i data-lucide="refresh-ccw"></i>
+        تجديد الاشتراك
+      </span>
+    </div>
+    <p class="action-desc">اختر مدة التجديد لتفعيل باقة جديدة اعتبارًا من اليوم.</p>
+
+    <form action="{{ url_for('renew_subscription') }}" method="POST" class="action-form">
+      <div class="form-group">
+        <label class="form-label">مدة التجديد</label>
+        <select name="months" class="form-control">
+          <option value="1">شهر واحد</option>
+          <option value="3">3 أشهر</option>
+          <option value="6">6 أشهر</option>
+          <option value="12">12 شهر</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-success btn-block">
+        <i data-lucide="check-circle"></i>
+        تجديد الاشتراك
+      </button>
+    </form>
+  </div>
+
+  <!-- Section 4 — Update Message Limit -->
+  <div class="card glass-card action-card">
+    <div class="card-header">
+      <span class="card-title">
+        <i data-lucide="sliders-horizontal"></i>
+        تعديل الحد الأقصى للرسائل
+      </span>
+    </div>
+    <p class="action-desc">
+      الحد الحالي:
+      <strong>{{ subscription.message_limit }}</strong> رسالة
+    </p>
+
+    <form action="{{ url_for('update_subscription_limit') }}" method="POST" class="action-form">
+      <div class="form-group">
+        <label class="form-label">الحد الجديد</label>
+        <input
+          type="number"
+          name="new_limit"
+          class="form-control"
+          min="0"
+          step="1"
+          value="{{ subscription.message_limit }}"
+          required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">
+        <i data-lucide="save"></i>
+        حفظ
+      </button>
+    </form>
+  </div>
+
+  <!-- Section 5 — Update Grace Limit -->
+  <div class="card glass-card action-card">
+    <div class="card-header">
+      <span class="card-title">
+        <i data-lucide="shield-plus"></i>
+        تعديل حد فترة السماح
+      </span>
+    </div>
+    <p class="action-desc">
+      الحد الحالي:
+      <strong>{{ subscription.grace_limit }}</strong> رسالة إضافية
+    </p>
+
+    <form action="{{ url_for('update_subscription_grace') }}" method="POST" class="action-form">
+      <div class="form-group">
+        <label class="form-label">حد السماح الجديد</label>
+        <input
+          type="number"
+          name="new_grace"
+          class="form-control"
+          min="0"
+          step="1"
+          value="{{ subscription.grace_limit }}"
+          required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">
+        <i data-lucide="save"></i>
+        حفظ
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SECTION 6 — Subscription Controls (Danger Zone)
+     ══════════════════════════════════════════════════════════ -->
+<div class="section-title">
+  <h3><i data-lucide="octagon-alert"></i> منطقة التحكم الحرجة</h3>
+</div>
+
+<div class="card glass-card danger-zone">
+  <div class="danger-zone-header">
+    <div class="danger-zone-icon">
+      <i data-lucide="alert-octagon"></i>
+    </div>
+    <div>
+      <div class="danger-zone-title">إجراءات حساسة</div>
+      <div class="danger-zone-sub">هذه الإجراءات تؤثر مباشرة على عمل الذكاء الاصطناعي لهذا المعمل، يرجى التعامل بحذر.</div>
+    </div>
+  </div>
+
+  <div class="danger-zone-actions">
+
+    <form action="{{ url_for('reset_subscription_usage') }}" method="POST"
+          onsubmit="return confirm('هل أنت متأكد من إعادة تعيين عداد الاستخدام إلى صفر؟');">
+      <button type="submit" class="btn btn-secondary">
+        <i data-lucide="rotate-ccw"></i>
+        إعادة تعيين الاستخدام
+      </button>
+    </form>
+
+    {% if subscription.is_active %}
+    <form action="{{ url_for('suspend_subscription') }}" method="POST"
+          onsubmit="return confirm('هل أنت متأكد من إيقاف خدمة الذكاء الاصطناعي؟ لن يتم الرد على العملاء تلقائياً.');">
+      <button type="submit" class="btn btn-danger">
+        <i data-lucide="power-off"></i>
+        إيقاف الذكاء الاصطناعي
+      </button>
+    </form>
+    {% else %}
+    <form action="{{ url_for('activate_subscription') }}" method="POST"
+          onsubmit="return confirm('هل تريد إعادة تفعيل خدمة الذكاء الاصطناعي؟');">
+      <button type="submit" class="btn btn-success">
+        <i data-lucide="power"></i>
+        تفعيل الذكاء الاصطناعي
+      </button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+
+{% endblock %}

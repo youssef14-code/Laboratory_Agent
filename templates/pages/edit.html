@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}تعديل الصفحة{% endblock %}
+{% block topbar_title %}تعديل الصفحة{% endblock %}
+{% block topbar_sub %}{{ page.page_id }}{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <form action="{{ url_for('edit_page', platform_id=page.platform_id, page_id=page.page_id) }}" method="POST">
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>المنصة</label>
+        <input type="text" class="form-control" value="{{ page.platform.name if page.platform else page.platform_id }}" disabled>
+      </div>
+
+      <div class="form-group">
+        <label>Page ID</label>
+        <input type="text" class="form-control" value="{{ page.page_id }}" disabled>
+      </div>
+
+      <div class="form-group full-width">
+        <label>Access Token</label>
+        <input type="text" name="token" class="form-control" value="{{ page.token }}" required>
+      </div>
+
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-submit">حفظ التعديلات</button>
+      <a href="{{ url_for('list_pages') }}" class="btn btn-ghost">رجوع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

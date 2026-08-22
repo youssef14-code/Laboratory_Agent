@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% block title %}استفسار #{{ inquiry.id }}{% endblock %}
+
+{% block topbar_title %}تفاصيل الاستفسار{% endblock %}
+{% block topbar_sub %}رقم الاستفسار: #{{ inquiry.id }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('list_inquiries') }}" class="btn btn-ghost">→ رجوع للقائمة</a>
+{% endblock %}
+
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }}" style="margin-bottom:1rem">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+
+  <!-- Left: Prescription image -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">صورة الوصفة الطبية</span>
+    </div>
+    <div style="padding:1.25rem">
+      {% if inquiry.prescription_img %}
+        <img
+          src="{{ url_for('static', filename='uploads/' + inquiry.prescription_img) }}"
+          alt="وصفة طبية"
+          style="width:100%;border-radius:10px;border:1px solid var(--border);object-fit:contain;max-height:420px"
+        >
+      {% else %}
+        <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);background:var(--bg-hover);border-radius:10px;border:1px dashed var(--border)">
+          لا توجد صورة مرفقة
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right: Details -->
+  <div style="display:flex;flex-direction:column;gap:1.25rem">
+
+    <!-- Client info -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">معلومات العميل</span>
+      </div>
+      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:.85rem">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">رقم الهاتف</span>
+          <span style="font-weight:600;font-size:1.05rem">{{ inquiry.phone_number or '—' }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">المصدر</span>
+          <span class="pill pill-reviewed">{{ inquiry.comes_from or '—' }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">تاريخ الإرسال</span>
+          <span>{{ inquiry.created_at.strftime('%Y-%m-%d %H:%M') if inquiry.created_at else '—' }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="text-muted">الحالة الحالية</span>
+          <span class="pill pill-{{ inquiry.status.value | lower | replace(' ', '-') }}">{{ inquiry.status.value }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR results -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">نتائج التحليل التلقائي</span>
+      </div>
+      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem">
+
+        <!-- Confidence bar -->
+        <div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+            <span class="text-muted" style="font-size:.85rem">نسبة الثقة في الوصفة</span>
+            {% if inquiry.confidence_score is not none %}
+              {% set pct = (inquiry.confidence_score * 100) | int %}
+              <strong style="font-size:.9rem">{{ pct }}%</strong>
+            {% endif %}
+          </div>
+          {% if inquiry.confidence_score is not none %}
+            {% set pct = (inquiry.confidence_score * 100) | int %}
+            {% if pct >= 70 %}{% set cls = 'conf-high' %}
+            {% elif pct >= 40 %}{% set cls = 'conf-mid' %}
+            {% else %}{% set cls = 'conf-low' %}{% endif %}
+            <div class="conf-track" style="height:10px;border-radius:6px">
+              <div class="conf-fill {{ cls }}" data-pct="{{ pct }}" style="height:10px;border-radius:6px"></div>
+            </div>
+            {% if pct >= 70 %}
+            <p style="font-size:.8rem;color:#22c55e;margin-top:.35rem">✅ تم قبول الوصفة تلقائياً (ثقة أعلى من 70%)</p>
+            {% else %}
+            <p style="font-size:.8rem;color:#ef4444;margin-top:.35rem">⚠️ الثقة منخفضة — يُنصح بمراجعة يدوية</p>
+            {% endif %}
+          {% else %}
+            <span class="text-muted">لا توجد بيانات OCR</span>
+          {% endif %}
+        </div>
+
+        <!-- Services mentioned -->
+        {% if inquiry.services_mentioned %}
+        <div style="padding-top:.75rem;border-top:1px solid var(--border)">
+          <span class="text-muted" style="font-size:.85rem;display:block;margin-bottom:.5rem">الخدمات المذكورة</span>
+          <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+            {% for svc in inquiry.services_mentioned.split(',') %}
+              <span class="pill pill-reviewed" style="font-size:.8rem">{{ svc.strip() }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- Update status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">تحديث الحالة</span>
+      </div>
+      <div style="padding:1.25rem">
+        <form method="POST" action="{{ url_for('update_inquiry_status', inquiry_id=inquiry.id) }}" style="display:flex;gap:.75rem;align-items:center">
+          <select name="status" class="form-control" style="flex:1">
+            {% for s in ['Pending','Reviewed','Attended','No Show'] %}
+            <option value="{{ s }}" {% if inquiry.status.value == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">حفظ</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Confirm Services Section -->
+    {% if inquiry.status.value == 'Pending' %}
+    <div class="card" style="margin-top:1.5rem">
+      <div class="card-header">
+        <span class="card-title">تحديد التحاليل وتأكيد الروشتة</span>
+      </div>
+      <div style="padding:1.25rem">
+        <input type="text" id="serviceSearch" class="form-control" placeholder="ابحث عن التحليل هنا..." style="margin-bottom:1rem">
+        
+        <form method="POST" action="{{ url_for('confirm_inquiry', inquiry_id=inquiry.id) }}">
+          <div id="servicesList" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-hover);">
+            {% for s in services %}
+            <div class="service-item" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0;" data-name="{{ s.name|lower }}">
+              <input type="checkbox" name="selected_services" value="{{ s.id }}" id="service_{{ s.id }}">
+              <label for="service_{{ s.id }}" style="cursor:pointer; color:var(--text-primary); font-size:0.95rem; margin:0">
+                {{ s.name }} - <strong style="color:var(--primary)">{{ s.price }} ج.م</strong>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          
+          <button type="submit" class="btn btn-primary" style="width:100%">تأكيد وإرسال للمريض التحاليل المختارة</button>
+        </form>
+      </div>
+    </div>
+    
+    <script>
+      document.getElementById('serviceSearch').addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        const items = document.querySelectorAll('.service-item');
+        items.forEach(item => {
+          const name = item.getAttribute('data-name');
+          if (name.includes(query)) {
+            item.style.display = 'flex';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      });
+    </script>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- OCR extracted text -->
+{% if inquiry.ocr_extracted_text %}
+<div class="card" style="margin-top:1.5rem">
+  <div class="card-header">
+    <span class="card-title">النص المستخرج من الوصفة</span>
+  </div>
+  <div style="padding:1.25rem">
+    <pre style="background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:'Cairo',sans-serif;font-size:.9rem;white-space:pre-wrap;line-height:1.8;color:var(--text-primary)">{{ inquiry.ocr_extracted_text }}</pre>
+  </div>
+</div>
+{% endif %}
+
+<!-- Delete -->
+<div style="margin-top:1.5rem;display:flex;justify-content:flex-start">
+  <form method="POST" action="{{ url_for('delete_inquiry', inquiry_id=inquiry.id) }}"
+        onsubmit="return confirm('هل أنت متأكد من حذف هذا الاستفسار؟')">
+    <button class="btn btn-danger">حذف الاستفسار</button>
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.conf-fill[data-pct]').forEach(el => {
+    el.style.width = el.dataset.pct + '%';
+  });
+</script>
+{% endblock %}

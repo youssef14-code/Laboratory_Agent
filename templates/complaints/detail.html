@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}شكوى #{{ complaint.id }}{% endblock %}
+
+{% block topbar_title %}تفاصيل الشكوى{% endblock %}
+{% block topbar_sub %}رقم الشكوى: #{{ complaint.id }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('list_complaints') }}" class="btn btn-ghost">→ رجوع للقائمة</a>
+{% endblock %}
+
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }}" style="margin-bottom:1rem">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+
+  <!-- Left: Complaint Content -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">نص الشكوى</span>
+    </div>
+    <div style="padding:1.25rem">
+      <pre style="background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:'Cairo',sans-serif;font-size:.95rem;white-space:pre-wrap;line-height:1.8;color:var(--text-primary);min-height:150px">{{ complaint.complaint_text }}</pre>
+    </div>
+  </div>
+
+  <!-- Right: Details & Status Update -->
+  <div style="display:flex;flex-direction:column;gap:1.25rem">
+
+    <!-- Complaint Info -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">معلومات المرسل</span>
+      </div>
+      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:.85rem">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">رقم الهاتف</span>
+          <span style="font-weight:600;font-size:1.05rem">{{ complaint.phone_number }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">المصدر</span>
+          <span class="pill pill-reviewed">{{ complaint.comes_from or '—' }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">تاريخ الإرسال</span>
+          <span>{{ complaint.created_at.strftime('%Y-%m-%d %H:%M') if complaint.created_at else '—' }}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="text-muted">الحالة الحالية</span>
+          <span class="pill pill-{{ complaint.status.value | lower | replace(' ', '-') }}">{{ complaint.status.value }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">تحديث الحالة</span>
+      </div>
+      <div style="padding:1.25rem">
+        <form method="POST" action="{{ url_for('update_complaint_status', complaint_id=complaint.id) }}" style="display:flex;gap:.75rem;align-items:center">
+          <select name="status" class="form-control" style="flex:1">
+            {% for s in ['Pending','Reviewed','Attended','No Show'] %}
+            <option value="{{ s }}" {% if complaint.status.value == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">حفظ</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Delete -->
+<div style="margin-top:1.5rem;display:flex;justify-content:flex-start">
+  <form method="POST" action="{{ url_for('delete_complaint', complaint_id=complaint.id) }}"
+        onsubmit="return confirm('هل أنت متأكد من حذف هذه الشكوى؟')">
+    <button class="btn btn-danger">حذف الشكوى</button>
+  </form>
+</div>
+
+{% endblock %}

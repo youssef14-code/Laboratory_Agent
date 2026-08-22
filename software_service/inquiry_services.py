@@ -2,24 +2,13 @@
 software_services/inquiry_service.py
 """
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from models.models import Inquiry, Status, db
+from software_service.base_service import BaseService
 
 
-# ── result dataclass ──────────────────────────────────────────────────────────
-
-@dataclass
-class InquiryResult:
-    success: bool
-    inquiry: object
-    message: str
-
-
-# ── service ───────────────────────────────────────────────────────────────────
-
-class InquiryService:
+class InquiryService(BaseService):
 
     # ── read ──────────────────────────────────────────────────────────────────
 
@@ -43,15 +32,14 @@ class InquiryService:
                 pass
 
         query = query.order_by(Inquiry.created_at.desc())
-        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-        return pagination, "تم العثور على الاستفسارات"
+        return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الاستفسارات")
 
     @staticmethod
     def get_inquiry_by_id(inquiry_id):
         inquiry = db.session.get(Inquiry, inquiry_id)
         if not inquiry:
-            return InquiryResult(False, None, "الاستفسار غير موجود")
-        return InquiryResult(True, inquiry, "تم العثور على الاستفسار")
+            return None, "الاستفسار غير موجود"
+        return inquiry, "تم العثور على الاستفسار"
 
     @staticmethod
     def get_pending_count():
@@ -63,7 +51,7 @@ class InquiryService:
     def get_stats():
         total      = Inquiry.query.count()
         pending    = Inquiry.query.filter_by(status=Status.PENDING).count()
-        done  = Inquiry.query.filter_by(status=Status.DONE).count()
+        done       = Inquiry.query.filter_by(status=Status.DONE).count()
         confirmed  = Inquiry.query.filter_by(status=Status.CONFIRMED).count()
 
         # average confidence score for inquiries that have one
@@ -73,11 +61,11 @@ class InquiryService:
         ).filter(Inquiry.confidence_score.isnot(None)).scalar()
 
         return {
-            "total":    total,
-            "pending":  pending,
-            "done": done,
+            "total":     total,
+            "pending":   pending,
+            "done":      done,
             "confirmed": confirmed,
-            "avg_conf": round((avg_conf or 0) * 100, 1),   # 0-100 %
+            "avg_conf":  round((avg_conf or 0) * 100, 1),   # 0-100 %
         }
 
     # ── write ─────────────────────────────────────────────────────────────────
@@ -93,51 +81,44 @@ class InquiryService:
         services_mentioned: str = None,
         status: Status = Status.PENDING,
     ):
-        """Saves prescription inquiry to the database."""
-        try:
-            inquiry = Inquiry(
-                laboratory_id=laboratory_id,
-                phone_number=phone_number,
-                comes_from=comes_from,
-                prescription_img=prescription_img,
-                ocr_extracted_text=ocr_extracted_text,
-                confidence_score=confidence_score,
-                services_mentioned=services_mentioned,
-                status=status,
-                created_at=datetime.now(timezone.utc),
-            )
-            db.session.add(inquiry)
-            db.session.commit()
-            return InquiryResult(True, inquiry, "تم حفظ الاستفسار بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return InquiryResult(False, None, f"حدث خطأ: {str(e)}")
+        if not laboratory_id:
+            return None, "المعمل مطلوب"
+        if not phone_number or not phone_number.strip():
+            return None, "رقم الهاتف مطلوب"
+        if not comes_from or not comes_from.strip():
+             return None, "مصدر الاستفسار مطلوب"
 
+        """Saves prescription inquiry to the database."""
+        inquiry = Inquiry(
+            laboratory_id=laboratory_id,
+            phone_number=phone_number,
+            comes_from=comes_from,
+            prescription_img=prescription_img,
+            ocr_extracted_text=ocr_extracted_text,
+            confidence_score=confidence_score,
+            services_mentioned=services_mentioned,
+            status=status,
+            created_at=datetime.now(timezone.utc),
+        )
+        return BaseService.commit(inquiry, success_msg="تم حفظ الاستفسار بنجاح", error_prefix="حدث خطأ أثناء حفظ الاستفسار")
 
     @staticmethod
     def update_status(inquiry_id, new_status: str):
         inquiry = db.session.get(Inquiry, inquiry_id)
         if not inquiry:
-            return InquiryResult(False, None, "الاستفسار غير موجود")
+            return None, "الاستفسار غير موجود"
+
         try:
             inquiry.status = Status(new_status)
-            db.session.commit()
-            return InquiryResult(True, inquiry, "تم تحديث الحالة بنجاح")
         except ValueError:
-            return InquiryResult(False, None, "حالة غير صحيحة")
-        except Exception as e:
-            db.session.rollback()
-            return InquiryResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "حالة غير صحيحة"
+
+        return BaseService.update_commit(inquiry, success_msg="تم تحديث الحالة بنجاح", error_prefix="حدث خطأ أثناء تحديث الحالة")
 
     @staticmethod
     def delete_inquiry(inquiry_id):
         inquiry = db.session.get(Inquiry, inquiry_id)
         if not inquiry:
-            return InquiryResult(False, None, "الاستفسار غير موجود")
-        try:
-            db.session.delete(inquiry)
-            db.session.commit()
-            return InquiryResult(True, None, "تم حذف الاستفسار بنجاح")
-        except Exception as e:
-            db.session.rollback()
-            return InquiryResult(False, None, f"حدث خطأ: {str(e)}")
+            return None, "الاستفسار غير موجود"
+
+        return BaseService.delete(inquiry, success_msg="تم حذف الاستفسار بنجاح", error_prefix="حدث خطأ أثناء الحذف")

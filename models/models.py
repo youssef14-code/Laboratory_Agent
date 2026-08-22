@@ -137,7 +137,7 @@ class Homevisit(db.Model):
     phone_number = db.Column(db.String(50))
     status = db.Column(db.Enum(Status), default=Status.PENDING)
     booking_time = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    time = db.Column(db.String(20), nullable=True)
+    
     comes_from = db.Column(db.String(100))
     address = db.Column(db.String(255), nullable=False)
 

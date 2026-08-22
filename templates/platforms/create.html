@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}إضافة منصة{% endblock %}
+{% block topbar_title %}إضافة منصة{% endblock %}
+{% block topbar_sub %}إنشاء منصة تواصل جديدة{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <form action="{{ url_for('create_platform') }}" method="POST">
+    <div class="form-grid">
+
+      <div class="form-group full-width">
+        <label>اسم المنصة</label>
+        <input type="text" name="name" class="form-control" placeholder="مثال: Facebook, Instagram, WhatsApp" required>
+      </div>
+
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-submit">حفظ</button>
+      <a href="{{ url_for('list_platforms') }}" class="btn btn-ghost">رجوع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

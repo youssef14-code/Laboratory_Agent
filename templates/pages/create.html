@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}إضافة صفحة{% endblock %}
+{% block topbar_title %}إضافة صفحة{% endblock %}
+{% block topbar_sub %}ربط صفحة جديدة من منصة تواصل اجتماعي{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <form action="{{ url_for('create_page') }}" method="POST">
+    <div class="form-grid">
+
+      <div class="form-group full-width">
+        <label>المنصة</label>
+        <select name="platform_id" class="form-control" required>
+          <option value="">اختر المنصة</option>
+          {% for platform in platforms %}
+          <option value="{{ platform.id }}">{{ platform.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group full-width">
+        <label>Page ID</label>
+        <input type="text" name="page_id" class="form-control" required>
+      </div>
+
+      <div class="form-group full-width">
+        <label>Access Token</label>
+        <input type="text" name="token" class="form-control" required>
+      </div>
+
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-submit">حفظ</button>
+      <a href="{{ url_for('list_pages') }}" class="btn btn-ghost">رجوع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

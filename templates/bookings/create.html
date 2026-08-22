@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}حجز جديد{% endblock %}
+{% block topbar_title %}حجز جديد{% endblock %}
+{% block topbar_sub %}إضافة حجز يدوي{% endblock %}
+
+{% block content %}
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header">
+    <span class="card-title">بيانات الحجز</span>
+  </div>
+
+  <form action="{{ url_for('create_booking') }}" method="POST" style="padding:1.5rem;">
+    <div class="form-grid">
+
+      <div class="form-group full-width">
+        <label>اسم المريض <span style="color:#f87171;">*</span></label>
+        <input
+          type="text"
+          name="name"
+          class="form-control"
+          placeholder="الاسم الكامل"
+          required
+          value="{{ request.form.get('name', '') }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>رقم الهاتف <span style="color:#f87171;">*</span></label>
+        <input
+          type="text"
+          name="phone_number"
+          class="form-control"
+          placeholder="01xxxxxxxxx"
+          required
+          value="{{ request.form.get('phone_number', '') }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>تاريخ الحجز</label>
+        <input
+          type="text"
+          name="date"
+          class="form-control"
+          placeholder="مثال: 2024-12-25 أو الأحد الصباح"
+          value="{{ request.form.get('date', '') }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>تفاصيل إضافية</label>
+        <textarea
+          name="details"
+          class="form-control"
+          rows="3"
+          placeholder="أي ملاحظات إضافية (اختياري)"
+        >{{ request.form.get('details', '') }}</textarea>
+      </div>
+
+      <div class="form-group full-width">
+        <label>العنوان <span style="color:#f87171;">*</span></label>
+        <input
+          type="text"
+          name="address"
+          class="form-control"
+          placeholder="مثال: القاهرة - المعادي - شارع 9"
+          required
+          value="{{ request.form.get('address', '') }}"
+        >
+      </div>
+
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" style="margin-bottom:1rem;">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-submit">حفظ الحجز</button>
+      <a href="{{ url_for('list_bookings') }}" class="btn btn-ghost">رجوع</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
