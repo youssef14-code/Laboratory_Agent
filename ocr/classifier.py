@@ -203,5 +203,4 @@ def classify_prescription(image_path: str) -> dict:
         "reason":         result.get("notes", ""),
     }
 
-test =analyze_prescription("ocr/22.jpeg")
-print(test)
+

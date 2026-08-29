@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import text
 from rapidfuzz import fuzz
 
@@ -27,9 +28,44 @@ def _score_against(normalized_query: str, candidate: str) -> float:
     return (rapid + ngram) / 2
 
 
+def _extract_alias_candidates(alias_names_raw: str) -> list[str]:
+    """
+    alias_names متخزنة كـ JSON object (شكل AliasNames في schemas.py):
+    {"alias": "...", "measurement": "...", "equivalent_name": "...", "aliases": [...]}
+    بنرجع كل القيم النصية اللي تستاهل تتقارن كـ alias مرشح.
+    """
+    if not alias_names_raw:
+        return []
+
+    try:
+        parsed = json.loads(alias_names_raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    if not isinstance(parsed, dict):
+        return []
+
+    candidates = []
+
+    for key in ("alias", "equivalent_name"):
+        value = parsed.get(key)
+        if value and isinstance(value, str) and value.strip():
+            candidates.append(value.strip())
+
+    aliases_list = parsed.get("aliases") or []
+    if isinstance(aliases_list, list):
+        candidates.extend(
+            alias.strip()
+            for alias in aliases_list
+            if alias and isinstance(alias, str) and alias.strip()
+        )
+
+    return candidates
+
+
 def fuzzy_search(
     query: str,
-    limit: int = 2,
+    limit: int = 5,
 ) -> list[SearchResult]:
 
     normalized_query = normalize(query)
@@ -48,15 +84,11 @@ def fuzzy_search(
         # score على الاسم الأساسي
         best_score = _score_against(normalized_query, row.name)
 
-        # alias_names متخزنة كنص مفصول بفاصلة (CSV) — بنقارن على كل alias لوحده
-        if row.alias_names:
-            for alias in row.alias_names.split(","):
-                alias = alias.strip()
-                if not alias:
-                    continue
-                alias_score = _score_against(normalized_query, alias)
-                if alias_score > best_score:
-                    best_score = alias_score
+        # alias_names متخزنة كـ JSON — بنقارن على كل candidate لوحده
+        for alias in _extract_alias_candidates(row.alias_names):
+            alias_score = _score_against(normalized_query, alias)
+            if alias_score > best_score:
+                best_score = alias_score
 
         if best_score >= MIN_SCORE:
             scored.append((row, best_score))

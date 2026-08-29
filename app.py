@@ -32,12 +32,12 @@ from datetime import datetime, timezone, timedelta
 
 
 
-#from platforms.facebook_handler import FacebookHandler
-#from platforms.waha_handler import WahaHandler
-#from parsers.facebook import parse_facebook_message, parse_facebook_comment
-#from knowledge.vector_store import ensure_vector_table
+from platforms.facebook_handler import FacebookHandler
+from platforms.waha_handler import WahaHandler
+from parsers.facebook import parse_facebook_message, parse_facebook_comment
+from knowledge.vector_store import ensure_vector_table
 
-#ensure_vector_table()
+ensure_vector_table()
 
 
 # Load environment variables
@@ -537,9 +537,9 @@ def delete_lab(lab_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Knowledge pipeline routes (Labs & Bundles)
+# Knowledge pipeline routes 
 # ══════════════════════════════════════════════════════════════════════════
-""" 
+
 @app.route('/labs/<int:lab_id>/knowledge')
 @login_required
 def review_lab_knowledge(lab_id):
@@ -556,10 +556,11 @@ def generate_lab_knowledge(lab_id):
     lab, msg = LabServiceService.get_lab_by_id(lab_id)
     if not lab:
         return jsonify({"success": False, "message": "التحليل غير موجود"})
-    
+
     try:
         from knowledge.schemas import KnowledgeGenerationRequest, EntityType
         from knowledge.pipeline import run_pre_approval_stage
+
         req = KnowledgeGenerationRequest(
             name=lab.name,
             entity_type=EntityType.LAB,
@@ -569,10 +570,13 @@ def generate_lab_knowledge(lab_id):
             price=lab.price or 0.0
         )
         res = run_pre_approval_stage(req)
-        aliases_val = getattr(res, 'aliases', getattr(res, 'alias_names', []))
+
+        # res.alias_names هي AliasNames object، والقايمة الفعلية جوه .aliases
+        aliases_list = res.alias_names.aliases if res.alias_names else []
+
         data = {
             "description": res.description,
-            "alias_names": ", ".join(aliases_val) if isinstance(aliases_val, list) else str(aliases_val),
+            "alias_names": ", ".join(aliases_list),
             "keywords": ", ".join(res.keywords) if isinstance(res.keywords, list) else str(res.keywords),
             "search_text": res.search_text
         }
@@ -584,9 +588,9 @@ def generate_lab_knowledge(lab_id):
         data = {
             "description": f"تحليل {name} الطبي للمساعدة في التشخيص الطبي وتقييم الوظائف الحيوية للمريض.",
             "alias_names": f"{name}, فحص {name}, تحليل {name}",
-            "keywords": f"{name}, تحاليل طبية, عينة {lab.specimen or 'دم'}, فحوصات",
-            "search_text": f"فحص وتحليل {name} - السعر: {lab.price} ج.م - العينة: {lab.specimen or 'غير محدد'} - التعليمات: {lab.patient_instructions or 'بدون صيام'}"
-        }  
+            "keywords": f"{name}, تحاليل طبية, عينة {lab.sample_type or 'دم'}, فحوصات",
+            "search_text": f"فحص وتحليل {name} - السعر: {lab.price} ج.م - العينة: {lab.sample_type or 'غير محدد'} - التعليمات: {lab.patient_instructions or 'بدون صيام'}"
+        }
 
     return jsonify({"success": True, "data": data, "message": "تم توليد المعرفة بنجاح عبر Pipeline الذكاء الاصطناعي"})
 
@@ -597,7 +601,7 @@ def approve_lab_knowledge(lab_id):
     lab, msg = LabServiceService.get_lab_by_id(lab_id)
     if not lab:
         return jsonify({"success": False, "message": "التحليل غير موجود"})
-    
+
     data = request.json or request.form
     description = data.get('description', lab.description)
     alias_names = data.get('alias_names', lab.alias_names)
@@ -611,123 +615,36 @@ def approve_lab_knowledge(lab_id):
 
     try:
         db.session.commit()
-        # Trigger post approval pipeline vector store update
+
+        # تحديث الـ embedding في FAISS بعد الاعتماد
         try:
-            from knowledge.schemas import GeneratedKnowledge, EntityType
+            from knowledge.schemas import GeneratedKnowledge, AliasNames, EntityType
             from knowledge.pipeline import run_post_approval_stage
-            aliases_list = [a.strip() for a in alias_names.split(',') if a.strip()] if isinstance(alias_names, str) else alias_names
-            keywords_list = [k.strip() for k in keywords.split(',') if k.strip()] if isinstance(keywords, str) else keywords
+
+            aliases_list = [a.strip() for a in alias_names.split(',') if a.strip()] if isinstance(alias_names, str) else (alias_names or [])
+            keywords_list = [k.strip() for k in keywords.split(',') if k.strip()] if isinstance(keywords, str) else (keywords or [])
+
             gen_obj = GeneratedKnowledge(
                 description=description or lab.name,
-                aliases=aliases_list or [lab.name],
+                alias_names=AliasNames(aliases=aliases_list or [lab.name]),
                 keywords=keywords_list or [lab.name],
-                search_text=search_text or lab.name
+                search_text=search_text or lab.name,
             )
             run_post_approval_stage(lab.id, EntityType.LAB, lab.name, gen_obj)
         except Exception as pipe_err:
-          import traceback
-          print("=== VECTOR STORE UPDATE FAILED ===")
-          traceback.print_exc()
+            import traceback
+            print("=== VECTOR STORE UPDATE FAILED ===")
+            traceback.print_exc()
+
         return jsonify({"success": True, "message": "تم اعتماد حفظ المعرفة واعتمدت بنجاح في قاعدة البيانات وتحديث الفهرس الدلالي!"})
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": f"حدث خطأ أثناء الحفظ: {str(e)}"})
 
 
-@app.route('/bundles/<int:bundle_id>/knowledge')
-@login_required
-def review_bundle_knowledge(bundle_id):
-    bundle, msg = BundleServiceLogic.get_bundle_by_id(bundle_id)
-    if not bundle:
-        flash(msg, 'error')
-        return redirect(url_for('list_bundles'))
-    return render_template('knowledge/review.html', entity=bundle, entity_type='bundle')
-
-
-@app.route('/bundles/<int:bundle_id>/generate-knowledge', methods=['POST'])
-@login_required
-def generate_bundle_knowledge(bundle_id):
-    bundle, msg = BundleServiceLogic.get_bundle_by_id(bundle_id)
-    if not bundle:
-        return jsonify({"success": False, "message": "الباقة غير موجودة"})
-
-    try:
-        from knowledge.schemas import KnowledgeGenerationRequest, EntityType
-        from knowledge.pipeline import run_pre_approval_stage
-        req = KnowledgeGenerationRequest(
-            name=bundle.name,
-            entity_type=EntityType.BUNDLE,
-            entity_id=bundle.id,
-            patient_instructions=bundle.patient_instructions or "",
-            duration="24 ساعة",
-            price=bundle.price or 0.0
-        )
-        res = run_pre_approval_stage(req)
-        aliases_val = getattr(res, 'aliases', getattr(res, 'alias_names', []))
-        data = {
-            "description": res.description,
-            "alias_names": ", ".join(aliases_val) if isinstance(aliases_val, list) else str(aliases_val),
-            "keywords": ", ".join(res.keywords) if isinstance(res.keywords, list) else str(res.keywords),
-            "search_text": res.search_text
-        }
-    except Exception as e:
-        name = bundle.name
-        data = {
-            "description": f"باقة {name} الفحص الطبي الشامل لفحص وتحليل الوظائف الحيوية كاملة بخصم خاص.",
-            "alias_names": f"{name}, عروض {name}, فحص شامل {name}",
-            "keywords": f"{name}, باقة تحاليل, فحص شامل, عروض المعمل, تحاليل",
-            "search_text": f"باقة {name} الشاملة - السعر: {bundle.price} ج.م - التعليمات: {bundle.patient_instructions or 'صيام قبل الفحص'}"
-        }
-
-    return jsonify({"success": True, "data": data, "message": "تم توليد معرفة الباقة بنجاح عبر Pipeline الذكاء الاصطناعي"})
-
-
-@app.route('/bundles/<int:bundle_id>/approve-knowledge', methods=['POST'])
-@login_required
-def approve_bundle_knowledge(bundle_id):
-    bundle, msg = BundleServiceLogic.get_bundle_by_id(bundle_id)
-    if not bundle:
-        return jsonify({"success": False, "message": "الباقة غير موجودة"})
-    
-    data = request.json or request.form
-    description = data.get('description', bundle.description)
-    alias_names = data.get('alias_names', bundle.alias_names)
-    keywords = data.get('keywords', bundle.keywords)
-    search_text = data.get('search_text', bundle.search_text)
-
-    bundle.description = description
-    bundle.alias_names = alias_names
-    bundle.keywords = keywords
-    bundle.search_text = search_text
-
-    try:
-        db.session.commit()
-        # Trigger post approval pipeline vector store update
-        try:
-            from knowledge.schemas import GeneratedKnowledge, EntityType
-            from knowledge.pipeline import run_post_approval_stage
-            aliases_list = [a.strip() for a in alias_names.split(',') if a.strip()] if isinstance(alias_names, str) else alias_names
-            keywords_list = [k.strip() for k in keywords.split(',') if k.strip()] if isinstance(keywords, str) else keywords
-            gen_obj = GeneratedKnowledge(
-                description=description or bundle.name,
-                aliases=aliases_list or [bundle.name],
-                keywords=keywords_list or [bundle.name],
-                search_text=search_text or bundle.name
-            )
-            run_post_approval_stage(bundle.id, EntityType.BUNDLE, bundle.name, gen_obj)
-        except Exception as pipe_err:
-            pass
-
-        return jsonify({"success": True, "message": "تم اعتماد وتعديل معرفة الباقة بنجاح في قاعدة البيانات وتحديث الفهرس الدلالي!"})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "message": f"حدث خطأ أثناء الحفظ: {str(e)}"})
-
- """
 # ══════════════════════════════════════════════════════════════════════════
 # Booking routes
-# ══════════════════════════════════════════════════════════════════════════
-
+# ══════════════════════════════════
 # list bookings, with search/status filter + pagination + stats
 @app.route('/bookings')
 @login_required
@@ -850,9 +767,13 @@ def list_inquiries():
     search = request.args.get('search', '').strip()
     status = request.args.get('status', '')
 
-    pagination, _ = InquiryService.get_all_inquiries(
+    pagination, message = InquiryService.get_all_inquiries(
         page=page, per_page=10, search=search or None, status=status or None
     )
+    if pagination is None:
+        flash(message, 'error')
+        return redirect(url_for('list_inquiries'))
+
     stats = InquiryService.get_stats()
 
     return render_template(
@@ -870,15 +791,15 @@ def list_inquiries():
 @app.route('/inquiries/<int:inquiry_id>')
 @login_required
 def inquiry_detail(inquiry_id):
-    result = InquiryService.get_inquiry_by_id(inquiry_id)
-    if not result.success:
-        flash(result.message, 'error')
+    inquiry, message = InquiryService.get_inquiry_by_id(inquiry_id)
+    if not inquiry:
+        flash(message, 'error')
         return redirect(url_for('list_inquiries'))
 
     pagination, _ = LabServiceService.get_all_labs(page=1, per_page=1000)
     services = pagination.items if pagination else []
 
-    return render_template('inquiries/detail.html', inquiry=result.inquiry, services=services)
+    return render_template('inquiries/detail.html', inquiry=inquiry, services=services)
 
 
 # update an inquiry's status
@@ -886,23 +807,19 @@ def inquiry_detail(inquiry_id):
 @login_required
 def update_inquiry_status(inquiry_id):
     new_status = request.form.get('status')
-    result = InquiryService.update_status(inquiry_id, new_status)
-    flash(result.message, 'success' if result.success else 'error')
+    inquiry, message = InquiryService.update_status(inquiry_id, new_status)
+    flash(message, 'success' if inquiry else 'error')
     return redirect(request.referrer or url_for('list_inquiries'))
 
 
 # doctor confirms the labs for a prescription; replies to the patient (via Facebook if applicable)
-# doctor confirms the labs for a prescription
-# TODO: إعادة تفعيل إرسال الرد عبر Facebook/WhatsApp لما يترابطوا
 @app.route('/inquiries/<int:inquiry_id>/confirm', methods=['POST'])
 @login_required
 def confirm_inquiry(inquiry_id):
-    result = InquiryService.get_inquiry_by_id(inquiry_id)
-    if not result.success:
-        flash(result.message, 'error')
+    inquiry, message = InquiryService.get_inquiry_by_id(inquiry_id)
+    if not inquiry:
+        flash(message, 'error')
         return redirect(url_for('list_inquiries'))
-
-    inquiry = result.inquiry
 
     selected_service_ids = request.form.getlist('selected_services')
     if not selected_service_ids:
@@ -912,29 +829,96 @@ def confirm_inquiry(inquiry_id):
     selected_services = LabService.query.filter(
         LabService.id.in_([int(sid) for sid in selected_service_ids])
     ).all()
-
     if not selected_services:
         flash('الخدمات المحددة غير صالحة.', 'error')
         return redirect(url_for('inquiry_detail', inquiry_id=inquiry_id))
 
-    service_names = [s.name for s in selected_services]
-    total_price = sum(s.price for s in selected_services)
+    service_names = []
+    message_lines = [
+        "📋 تمت مراجعة الروشتة الخاصة بك من قبل الطبيب.",
+    "التحاليل المطلوبة:",
+    "",
+    ]
+    total_price = 0.0
+    for s in selected_services:
+        service_names.append(s.name)
+        message_lines.append(f"- {s.name}: {s.price} ج.م")
+        total_price += s.price
 
-    inquiry.services_mentioned = ", ".join(service_names)
-    inquiry.status = Status.REVIEWED
-    db.session.commit()
+    message_lines.append(f"💰 الإجمالي: {total_price:g} ج.م")
+    message_lines.append("لتأكيد الحجز، ابعتلي كلمة \"تأكيد\" وهنكمل معاك خطوات الحجز 👍")
+    reply_text = "\n".join(message_lines)
 
-    flash(f"تمت المراجعة وحفظ البيانات محلياً. إجمالي التكلفة: {total_price} ج.م", "success")
+    comes_from = inquiry.comes_from or ""
+    try:
+        platform, sender_id, page_id = comes_from.split(":", 2)
+    except ValueError:
+
+        inquiry.services_mentioned = ", ".join(service_names)
+        inquiry.status = Status.DONE
+        db.session.commit()
+         
+        flash("تمت المراجعة وحفظ البيانات محلياً.", "success")
+        return redirect(url_for("inquiry_detail", inquiry_id=inquiry_id))
+    platform = platform.strip().lower()
+    platform_map = {
+        "facebook": FacebookHandler,
+        "whatsapp": WahaHandler,
+    }
+    if platform not in platform_map:
+        inquiry.services_mentioned = ", ".join(service_names)
+        inquiry.status = Status.DONE
+        db.session.commit()
+        flash("تمت المراجعة وحفظ البيانات محلياً.", "success")
+        return redirect(url_for("inquiry_detail", inquiry_id=inquiry_id))
+    handler_class = platform_map[platform]
+    platform_row = Platform.query.filter_by(name=platform).first()
+    if not platform_row:
+        flash("منصة غير معروفة.", "error")
+        return redirect(url_for("inquiry_detail", inquiry_id=inquiry_id))
+    platform_id = platform_row.id
+    page = Page.query.filter_by(
+        platform_id=platform_id,
+        page_id=page_id
+    ).first()
+
+    if not page:
+        flash("الصفحة المرتبطة بهذا الاستفسار غير موجودة.", "error")
+        return redirect(url_for("inquiry_detail", inquiry_id=inquiry_id))
+
+    try:
+        handler = handler_class(page)
+        handler.send(sender_id, reply_text)
+
+        client = ClientService.get_or_create_client(sender_id, page_id, platform_id)
+        ClientService.update_client_summary_and_last_bot_message(
+            sender_id=sender_id,
+            page_id=page_id,
+            platform_id=platform_id,
+            summary=f"Doctor reviewed prescription and confirmed tests: {', '.join(service_names)}. Total price: {total_price} EGP.",
+            last_bot_message=reply_text
+        )
+
+
+        inquiry.services_mentioned = ", ".join(service_names)
+        inquiry.status = Status.DONE
+        db.session.commit()
+
+        flash("تم تأكيد الروشتة وإرسالها للمستخدم بنجاح.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"حدث خطأ أثناء إرسال الرد: {str(e)}", "error")
+
     return redirect(url_for("inquiry_detail", inquiry_id=inquiry_id))
 
 # delete an inquiry
 @app.route('/inquiries/<int:inquiry_id>/delete', methods=['POST'])
 @login_required
 def delete_inquiry(inquiry_id):
-    result = InquiryService.delete_inquiry(inquiry_id)
-    flash(result.message, 'success' if result.success else 'error')
+    inquiry, message = InquiryService.delete_inquiry(inquiry_id)
+    flash(message, 'success' if inquiry else 'error')
     return redirect(url_for('list_inquiries'))
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # Complaint routes
@@ -968,11 +952,11 @@ def list_complaints():
 @app.route('/complaints/<int:complaint_id>')
 @login_required
 def complaint_detail(complaint_id):
-    result = ComplaintService.get_complaint_by_id(complaint_id)
-    if not result.success:
-        flash(result.message, 'error')
+    complaint, message = ComplaintService.get_complaint_by_id(complaint_id)
+    if not complaint:
+        flash(message, 'error')
         return redirect(url_for('list_complaints'))
-    return render_template('complaints/detail.html', complaint=result.complaint)
+    return render_template('complaints/detail.html', complaint=complaint)
 
 
 # update a complaint's status
@@ -980,8 +964,8 @@ def complaint_detail(complaint_id):
 @login_required
 def update_complaint_status(complaint_id):
     new_status = request.form.get('status')
-    result = ComplaintService.update_status(complaint_id, new_status)
-    flash(result.message, 'success' if result.success else 'error')
+    complaint, message = ComplaintService.update_status(complaint_id, new_status)
+    flash(message, 'success' if complaint else 'error')
     return redirect(request.referrer or url_for('list_complaints'))
 
 
@@ -989,8 +973,8 @@ def update_complaint_status(complaint_id):
 @app.route('/complaints/<int:complaint_id>/delete', methods=['POST'])
 @login_required
 def delete_complaint(complaint_id):
-    result = ComplaintService.delete_complaint(complaint_id)
-    flash(result.message, 'success' if result.success else 'error')
+    complaint, message = ComplaintService.delete_complaint(complaint_id)
+    flash(message, 'success' if complaint else 'error')
     return redirect(url_for('list_complaints'))
 
 
@@ -1306,7 +1290,7 @@ def update_subscription_grace():
     return redirect(url_for("admin_subscription"))
 
 
-""" # ══════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════
 # Facebook webhook
 # ══════════════════════════════════════
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN") or os.environ.get("FB_VERIFY_TOKEN")
@@ -1364,7 +1348,7 @@ def fb_webhook():
                         handler.send_typing(message.sender_id)
 
                         reply, ticket_bytes = handler.handle(message)
-
+                        print(f"[DEBUG] has_reply={bool(reply)} has_ticket={bool(ticket_bytes)}")  # ← أضف السطر ده
                         logger.info(
                             "[FB] sender=%s has_reply=%s has_ticket=%s",
                             message.sender_id,
@@ -1412,7 +1396,7 @@ def fb_webhook():
     return "OK", 200
 
 
-@app.route("/webhook/waha", methods=["POST"])
+""" @app.route("/webhook/waha", methods=["POST"])
 def waha_webhook():
     logger.info("Webhook received")
 
@@ -1548,4 +1532,4 @@ def health():
 
 if __name__ == '__main__':
 
-    app.run(debug=False)
+    app.run(debug=True)

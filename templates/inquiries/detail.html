@@ -20,8 +20,16 @@
 
   <!-- Left: Prescription image -->
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
       <span class="card-title">صورة الوصفة الطبية</span>
+      {% if inquiry.prescription_img %}
+        <a href="{{ url_for('static', filename='uploads/' + inquiry.prescription_img) }}"
+           download="prescription_{{ inquiry.id }}.jpg"
+           class="btn btn-ghost"
+           style="padding:.35rem .75rem;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem">
+          ⬇ تحميل الصورة
+        </a>
+      {% endif %}
     </div>
     <div style="padding:1.25rem">
       {% if inquiry.prescription_img %}
@@ -95,7 +103,7 @@
               <div class="conf-fill {{ cls }}" data-pct="{{ pct }}" style="height:10px;border-radius:6px"></div>
             </div>
             {% if pct >= 70 %}
-            <p style="font-size:.8rem;color:#22c55e;margin-top:.35rem">✅ تم قبول الوصفة تلقائياً (ثقة أعلى من 70%)</p>
+            <p style="font-size:.8rem;color:#22c55e;margin-top:.35rem">✅ تم قبول الوصفة تلقائياً (ثقة أعلى من 90%)</p>
             {% else %}
             <p style="font-size:.8rem;color:#ef4444;margin-top:.35rem">⚠️ الثقة منخفضة — يُنصح بمراجعة يدوية</p>
             {% endif %}
@@ -127,7 +135,7 @@
       <div style="padding:1.25rem">
         <form method="POST" action="{{ url_for('update_inquiry_status', inquiry_id=inquiry.id) }}" style="display:flex;gap:.75rem;align-items:center">
           <select name="status" class="form-control" style="flex:1">
-            {% for s in ['Pending','Reviewed','Attended','No Show'] %}
+            {% for s in ['Pending','Done','Confirmed','No Show'] %}
             <option value="{{ s }}" {% if inquiry.status.value == s %}selected{% endif %}>{{ s }}</option>
             {% endfor %}
           </select>
@@ -144,24 +152,42 @@
       </div>
       <div style="padding:1.25rem">
         <input type="text" id="serviceSearch" class="form-control" placeholder="ابحث عن التحليل هنا..." style="margin-bottom:1rem">
-        
+
         <form method="POST" action="{{ url_for('confirm_inquiry', inquiry_id=inquiry.id) }}">
-          <div id="servicesList" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; background: var(--bg-hover);">
-            {% for s in services %}
-            <div class="service-item" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0;" data-name="{{ s.name|lower }}">
-              <input type="checkbox" name="selected_services" value="{{ s.id }}" id="service_{{ s.id }}">
-              <label for="service_{{ s.id }}" style="cursor:pointer; color:var(--text-primary); font-size:0.95rem; margin:0">
-                {{ s.name }} - <strong style="color:var(--primary)">{{ s.price }} ج.م</strong>
-              </label>
+          <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:1rem; align-items:start; margin-bottom:1rem;">
+
+            <!-- All services list -->
+            <div id="servicesList" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover);">
+              {% for s in services %}
+              <div class="service-item" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0;" data-name="{{ s.name|lower }}">
+                <input type="checkbox" name="selected_services" value="{{ s.id }}" id="service_{{ s.id }}"
+                       data-name-display="{{ s.name }}" data-price="{{ s.price }}">
+                <label for="service_{{ s.id }}" style="cursor:pointer; color:var(--text-primary); font-size:0.95rem; margin:0">
+                  {{ s.name }} - <strong style="color:var(--primary)">{{ s.price }} ج.م</strong>
+                </label>
+              </div>
+              {% endfor %}
             </div>
-            {% endfor %}
+
+            <!-- Selected services summary (live) -->
+            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover); max-height: 280px; display:flex; flex-direction:column;">
+              <span class="text-muted" style="font-size:.8rem; margin-bottom:.5rem; display:block">التحاليل المختارة</span>
+              <div id="selectedServicesList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:.35rem;">
+                <span id="noSelectionMsg" class="text-muted" style="font-size:.85rem">لم تحدد أي تحليل بعد</span>
+              </div>
+              <div style="border-top:1px solid var(--border); margin-top:.6rem; padding-top:.6rem; display:flex; justify-content:space-between; font-size:.9rem;">
+                <span class="text-muted">الإجمالي</span>
+                <strong id="selectedTotalPrice" style="color:var(--primary)">0.0 ج.م</strong>
+              </div>
+            </div>
+
           </div>
-          
-          <button type="submit" class="btn btn-primary" style="width:100%">تأكيد وإرسال للمريض التحاليل المختارة</button>
+
+          <button type="submit" class="btn btn-primary" style="width:100%">تأكيد وإرسال للمريض </button>
         </form>
       </div>
     </div>
-    
+
     <script>
       document.getElementById('serviceSearch').addEventListener('input', function() {
         const query = this.value.toLowerCase();
@@ -174,6 +200,54 @@
             item.style.display = 'none';
           }
         });
+      });
+
+      function updateSelectedServicesList() {
+        const checkboxes = document.querySelectorAll('#servicesList input[type="checkbox"]:checked');
+        const listEl = document.getElementById('selectedServicesList');
+        const noSelectionMsg = document.getElementById('noSelectionMsg');
+        const totalEl = document.getElementById('selectedTotalPrice');
+
+        listEl.querySelectorAll('.selected-chip').forEach(el => el.remove());
+
+        let total = 0;
+        checkboxes.forEach(cb => {
+          const name = cb.getAttribute('data-name-display');
+          const price = parseFloat(cb.getAttribute('data-price')) || 0;
+          total += price;
+
+          const chip = document.createElement('div');
+          chip.className = 'selected-chip';
+          chip.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:.4rem; font-size:.85rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:.3rem .5rem;';
+          chip.innerHTML = `
+            <span style="color:var(--text-primary)">${name}</span>
+            <span style="display:flex; align-items:center; gap:.4rem">
+              <strong style="color:var(--primary)">${price} ج.م</strong>
+              <span data-remove-id="${cb.id}" style="cursor:pointer; color:var(--text-muted)">✕</span>
+            </span>
+          `;
+          listEl.appendChild(chip);
+        });
+
+        noSelectionMsg.style.display = checkboxes.length ? 'none' : 'block';
+        totalEl.textContent = total.toFixed(1) + ' ج.م';
+      }
+
+      document.getElementById('servicesList').addEventListener('change', function(e) {
+        if (e.target.matches('input[type="checkbox"]')) {
+          updateSelectedServicesList();
+        }
+      });
+
+      document.getElementById('selectedServicesList').addEventListener('click', function(e) {
+        const removeId = e.target.getAttribute('data-remove-id');
+        if (removeId) {
+          const cb = document.getElementById(removeId);
+          if (cb) {
+            cb.checked = false;
+            updateSelectedServicesList();
+          }
+        }
       });
     </script>
     {% endif %}

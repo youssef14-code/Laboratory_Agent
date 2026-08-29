@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def semantic_search(
     query: str,
     description: str | None = None,
-    limit: int = 3,
+    limit: int = 5,
 ) -> list[SearchResult]:
 
     if not query.strip():

@@ -60,7 +60,6 @@ def generate_knowledge(request: KnowledgeGenerationRequest) -> GeneratedKnowledg
         try:
             raw = _call_gemini(prompt)
             obj = GeneratedKnowledge(**raw)
-            obj.construct_search_text(request.name)
             return obj
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
