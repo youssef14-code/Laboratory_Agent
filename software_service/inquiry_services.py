@@ -83,8 +83,8 @@ class InquiryService(BaseService):
     ):
         if not laboratory_id:
             return None, "المعمل مطلوب"
-        if not phone_number or not phone_number.strip():
-            return None, "رقم الهاتف مطلوب"
+        phone_number = (phone_number or "").strip() or None
+        
         if not comes_from or not comes_from.strip():
              return None, "مصدر الاستفسار مطلوب"
 

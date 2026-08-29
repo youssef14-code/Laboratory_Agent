@@ -94,3 +94,8 @@ def search(query_embedding: list[float], k: int = 5) -> list[dict]:
             "score": float(score),
         })
     return results
+
+
+def ensure_vector_table() -> None:
+    """تهيئة وتحميل الفهرس للتأكد من جاهزية ملفات FAISS عند بدء تشغيل السيرفر."""
+    _load()

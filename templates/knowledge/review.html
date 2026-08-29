@@ -89,7 +89,7 @@
     <div class="kp-hero">
       <div class="kp-eyebrow">
         <i data-lucide="sparkles"></i>
-        {% if entity_type == 'lab' %}تحليل طبي{% else %}باقة تحاليل شاملة{% endif %}
+        تحليل طبي
       </div>
       <div class="kp-title">{{ entity.name }}</div>
       <p style="font-size:.85rem;color:#c7d2fe;">مراجعة المعرفة الطبية المولّدة بالذكاء الاصطناعي قبل اعتمادها</p>
@@ -156,26 +156,23 @@
 
       <div class="kp-actions">
         <button type="button" id="generateBtn" class="kp-btn kp-btn-generate"
-          data-url="{% if entity_type == 'lab' %}{{ url_for('generate_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('generate_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
+          data-url="{{ url_for('generate_lab_knowledge', lab_id=entity.id) }}">
           <i data-lucide="sparkles" id="genIcon"></i> توليد بالذكاء الاصطناعي
         </button>
         <button type="button" id="approveBtn" class="kp-btn kp-btn-approve"
-          data-url="{% if entity_type == 'lab' %}{{ url_for('approve_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('approve_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
+          data-url="{{ url_for('approve_lab_knowledge', lab_id=entity.id) }}">
           <i data-lucide="check-circle-2"></i> اعتماد وحفظ المعرفة
         </button>
-        <a href="{% if entity_type == 'lab' %}{{ url_for('list_labs') }}{% else %}{{ url_for('list_bundles') }}{% endif %}"
-           class="kp-btn kp-btn-ghost">عودة</a>
+        <a href="{{ url_for('list_labs') }}" class="kp-btn kp-btn-ghost">عودة</a>
       </div>
     </form>
   </div>
 
   <aside class="kp-side">
     <div class="kp-side-card">
-      <div class="kp-side-title">بيانات {{ 'التحليل' if entity_type == 'lab' else 'الباقة' }}</div>
-      {% if entity_type == 'lab' %}
-      <div class="kp-fact"><span class="kp-fact-label">العينة</span><span class="kp-fact-value">{{ entity.specimen or '—' }}</span></div>
+      <div class="kp-side-title">بيانات التحليل</div>
+      <div class="kp-fact"><span class="kp-fact-label">العينة</span><span class="kp-fact-value">{{ entity.sample_type or '—' }}</span></div>
       <div class="kp-fact"><span class="kp-fact-label">مدة الظهور</span><span class="kp-fact-value">{{ entity.durations or '—' }}</span></div>
-      {% endif %}
       <div class="kp-fact"><span class="kp-fact-label">السعر</span><span class="kp-fact-value">{{ "%.2f"|format(entity.price or 0.0) }} ج.م</span></div>
       <div class="kp-fact"><span class="kp-fact-label">تعليمات المريض</span><span class="kp-fact-value" style="font-weight:600;">{{ entity.patient_instructions or 'بدون تعليمات' }}</span></div>
     </div>
