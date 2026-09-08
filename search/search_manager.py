@@ -11,11 +11,14 @@ def run_search(refined_queries):
 
         fuzzy_results = fuzzy_search(
             query=item.query,
+            aliases=item.aliases,
+            keywords=item.keywords,
             limit=2,
         )
 
         semantic_results = semantic_search(
             query=item.query,
+            keywords=item.keywords,
             description=item.description,
             limit=3,
         )

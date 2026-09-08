@@ -29,11 +29,14 @@ from knowledge.embedding import generate_embedding, build_search_text
 from knowledge.vector_store import FAISS_INDEX_PATH, FAISS_METADATA_PATH, upsert_vector
 
 
-def parse_csv_field(value: str | None) -> list[str]:
-    """alias_names و keywords متخزنين كـ نص مفصول بفاصلة (CSV)، مش JSON."""
+def parse_json_field(value) -> list[str]:
+    """alias_names و keywords متخزنين كـ JSON list في MySQL (db.JSON) -
+    SQLAlchemy بيرجعهم كـ list بايثون جاهز، مش نص محتاج parsing."""
     if not value:
         return []
-    return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return value
+    return []
 
 
 def main():
@@ -52,8 +55,8 @@ def main():
 
         for idx, lab in enumerate(labs, start=1):
             try:
-                keywords = parse_csv_field(lab.keywords)
-                aliases = parse_csv_field(lab.alias_names)
+                keywords = parse_json_field(lab.keywords)
+                aliases = parse_json_field(lab.alias_names)
 
                 text = build_search_text(
                     name=lab.name,

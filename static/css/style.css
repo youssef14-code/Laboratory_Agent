@@ -1,6 +1,6 @@
 /* ============================================================
    MEDICAL LAB DASHBOARD — Modern Modular CSS Design System
-   Font: Cairo (RTL), Deep Indigo Sidebar + Premium Glass Surface
+   Font: Cairo (RTL), Majed Safwat Labs brand theme
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
@@ -14,33 +14,43 @@
 
 :root {
   /* Brand & Theme Colors */
-  --primary:           #6366f1;
-  --primary-hover:     #4f46e5;
-  --primary-light:     #a5b4fc;
-  --primary-bg:        rgba(99, 102, 241, 0.08);
-  --primary-glow:      rgba(99, 102, 241, 0.25);
+  --primary:           #d91f26;
+  --primary-hover:     #b71319;
+  --primary-light:     #ff7469;
+  --primary-bg:        rgba(217, 31, 38, 0.08);
+  --primary-glow:      rgba(245, 158, 11, 0.24);
+  --brand-gold:        #f5a000;
+  --brand-gold-hover:  #d98700;
+  --brand-gold-soft:   #fff4cc;
 
-  /* Sidebar Theme (Deep Midnight Navy) */
-  --sb-bg:             #0f172a;
-  --sb-surface:        #1e293b;
+  /* Sidebar Theme (warm charcoal from the black logo mark) */
+  --sb-bg:             #171210;
+  --sb-surface:        #2a1d19;
   --sb-border:         rgba(255, 255, 255, 0.08);
-  --sb-text:           #94a3b8;
-  --sb-text-hover:     #e2e8f0;
+  --sb-text:           #bcaea8;
+  --sb-text-hover:     #fff7ed;
   --sb-text-active:    #ffffff;
-  --sb-accent-bg:      rgba(99, 102, 241, 0.15);
-  --sb-accent-border:  rgba(99, 102, 241, 0.3);
+  --sb-accent-bg:      rgba(217, 31, 38, 0.16);
+  --sb-accent-border:  rgba(245, 160, 0, 0.32);
   --sb-width:          260px;
 
   /* Surface & Page */
-  --page-bg:           #f8fafc;
+  --page-bg:           #fffaf5;
   --surface-bg:        #ffffff;
-  --surface-border:    #e2e8f0;
-  --surface-hover:     #f1f5f9;
+  --surface-border:    #eee2dc;
+  --surface-hover:     #fff5ed;
+
+  /* Compatibility aliases used by a few inline page styles */
+  --bg-main:           var(--page-bg);
+  --bg-card:           var(--surface-bg);
+  --bg-hover:          var(--surface-hover);
+  --bg:                var(--surface-bg);
+  --border:            var(--surface-border);
 
   /* Text & Contrast */
-  --text-primary:      #0f172a;
-  --text-secondary:    #475569;
-  --text-muted:        #94a3b8;
+  --text-primary:      #211715;
+  --text-secondary:    #62504a;
+  --text-muted:        #9a8780;
 
   /* Status Colors */
   --status-pending-bg:     #fffbe6;
@@ -72,7 +82,7 @@
   --shadow-sm:         0 1px 3px rgba(15, 23, 42, 0.06);
   --shadow-md:         0 4px 16px -2px rgba(15, 23, 42, 0.08);
   --shadow-lg:         0 12px 32px -4px rgba(15, 23, 42, 0.12);
-  --shadow-glow:       0 0 20px rgba(99, 102, 241, 0.2);
+  --shadow-glow:       0 0 22px rgba(217, 31, 38, 0.18);
   --transition:        all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --topbar-h:          70px;
 }
@@ -258,9 +268,9 @@ button, input, select, textarea {
 
 .nav-item.active {
   color: var(--sb-text-active);
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary), #ef542f);
   font-weight: 700;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 5px 16px rgba(217, 31, 38, 0.32);
 }
 
 .nav-icon {
@@ -284,7 +294,7 @@ button, input, select, textarea {
 .sidebar-footer {
   padding: 16px;
   border-top: 1px solid var(--sb-border);
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .sidebar-user {
@@ -300,7 +310,7 @@ button, input, select, textarea {
 .avatar {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--primary), var(--brand-gold));
   color: #ffffff;
   font-weight: 800;
   font-size: 15px;
@@ -308,7 +318,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 2px 9px rgba(217, 31, 38, 0.34);
 }
 
 .user-info {
@@ -418,7 +428,7 @@ button, input, select, textarea {
    DASHBOARD HERO & STAT CARDS
    ============================================================ */
 .dashboard-hero {
-  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #4338ca 100%);
+  background: linear-gradient(135deg, #211412 0%, #8f171d 58%, #ed542d 100%);
   color: #ffffff;
   padding: 36px 32px;
   border-radius: var(--radius-lg);
@@ -439,7 +449,7 @@ button, input, select, textarea {
   left: -50px;
   width: 250px;
   height: 250px;
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.25) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 188, 47, 0.28) 0%, transparent 70%);
   border-radius: 50%;
 }
 
@@ -450,7 +460,7 @@ button, input, select, textarea {
   right: 10%;
   width: 220px;
   height: 220px;
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.15) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 218, 102, 0.20) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -491,7 +501,7 @@ button, input, select, textarea {
 
 .hero-welcome p {
   font-size: 0.95rem;
-  color: #c7d2fe;
+  color: #fff1dc;
   line-height: 1.6;
 }
 
@@ -553,10 +563,10 @@ button, input, select, textarea {
   height: 24px;
 }
 
-.si-blue { background: #eff6ff; color: #2563eb; }
+.si-blue { background: #fff1f2; color: #d91f26; }
 .si-amber { background: #fffbe6; color: #d97706; }
 .si-green { background: #ecfdf5; color: #059669; }
-.si-purple { background: #f3e8ff; color: #7c3aed; }
+.si-purple { background: #fff4cc; color: #b86f00; }
 
 .stat-details {
   flex: 1;
@@ -636,8 +646,8 @@ button, input, select, textarea {
 }
 
 .bg-amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.bg-blue { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-.bg-purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+.bg-blue { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.bg-purple { background: linear-gradient(135deg, #fbbf24, #d97706); }
 .bg-green { background: linear-gradient(135deg, #10b981, #047857); }
 
 .quick-info {
@@ -688,14 +698,14 @@ button, input, select, textarea {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary), #ef542f);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(217, 31, 38, 0.28);
 }
 
 .btn-primary:hover {
   background: var(--primary-hover);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 4px 14px rgba(217, 31, 38, 0.38);
   transform: translateY(-1px);
 }
 

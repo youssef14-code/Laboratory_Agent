@@ -1,7 +1,8 @@
 import os
 import uuid
+from pymupdf import message
 import requests
-
+import time
 from graph.agent_response import AgentResponse
 from graph.graph import get_agent_graph
 from graph.utils import count_request
@@ -152,8 +153,16 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     current_summary = client.summary if (client and hasattr(client, "summary") and client.summary) else ""
     current_last_bot = client.last_bot_message if (client and hasattr(client, "last_bot_message") and client.last_bot_message) else ""
 
-    platform_name = message.platform_name or str(message.platform_id)
+    
 
+    history_rows, _ = ClientService.get_chat_history(
+        platform_id=message.platform_id,
+        page_id=message.page_id,
+        sender_id=message.sender_id,
+        limit=7,  # آخر 7 رسائل متبادلة (User / Bot)
+    )
+    formatted_chat_history = ClientService.format_chat_history(history_rows)
+    platform_name = message.platform_name or str(message.platform_id)
     # 2. تجهيز الـ State الموحدة
     state = {
         "page_id": str(message.page_id),
@@ -163,6 +172,7 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
         "user_message": message.text or "",
         "summary": current_summary,
         "last_bot_message": current_last_bot,
+        "chat_history": formatted_chat_history,  # 👈 تمرير سجل المحادثة إلى Graph State
 
         "intent": None,
         "refined_queries": [],
@@ -190,6 +200,8 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
         "visit_reference": None,
     }
 
+    call_start_time = time.perf_counter()
+    
     try:
         result = get_agent_graph().invoke(state)
         response_obj = AgentResponse.from_result(result)
@@ -210,6 +222,9 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
         )
         return "عذرًا، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.", None
     
+    total_latency_sec = time.perf_counter() - call_start_time
+    total_latency_ms = int(total_latency_sec * 1000)
+
     usage = _calc_total_usage(result, ocr_usage=ocr_usage)
 
     # خصم الاستهلاك من الاشتراك
@@ -220,6 +235,20 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     print(f" 👤 Sender ID: {message.sender_id} | Platform: {platform_name} | Intent: {result.get('intent')}")
     print("-" * 76)
     print(" 🔹 Node Breakdown:")
+    # ══════════════════════════════════════════════════════════════════════════
+    # ⏱️ طباعة تفاصيل الوقت والسرعة والتكلفة في التيرمنال
+    # ══════════════════════════════════════════════════════════════════════════
+    node_timings = result.get("node_timings") or {}
+    print(" ⏱️ تفاصيل زمن المعالجة (LATENCY BREAKDOWN):")
+    nodes_list = list(node_timings.items())
+    for idx, (node_name, duration) in enumerate(nodes_list):
+        prefix = "└─" if idx == len(nodes_list) - 1 else "├─"
+        ms = int(duration * 1000)
+        print(f"    {prefix} ⏳ {node_name:<20} : {duration:>6.2f}s  ({ms:>5,} ms)")
+    print(" " + "─" * 74)
+    print(f" ⚡ TOTAL REQUEST LATENCY    : {total_latency_sec:>6.2f}s  ({total_latency_ms:>5,} ms)")
+    print("-" * 76)
+
     # =========================================================================
     # 🖨️ طباعة الـ Refined Queries والـ Summary والـ Last Bot Reply في التيرمنال
     # =========================================================================
@@ -230,6 +259,8 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     print("═" * 75)
     print(f" 🔍 Refined Queries : {queries_summary or '[] (لم يتم استخراج تحاليل محددة)'}")
     print(f" 🧭 Intent          : {result.get('intent')}")
+    print("─" * 75)
+    print(f" 📜 Current Chat History :\n{formatted_chat_history or '(لا يوجد سجل محادثة سابق)'}")
     print("─" * 75)
     print(f" 🧠 Current Summary :\n{result.get('summary') or '(لا يوجد ملخص)'}")
     print("─" * 75)
@@ -311,20 +342,34 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
 
         if ocr_result.get("classified_as") == "prescription":
             static_reply = "لقد استلمنا صورتك وسيقوم الطبيب بمراجعتها والرد عليك."
+            user_display_msg = message.text or "📷 [تم إرسال صورة روشتة طبية]"
 
-            ClientService.update_client_summary_and_last_bot_message(
-                sender_id=message.sender_id,
-                page_id=message.page_id,
+
+            ClientService.save_chat_exchange(
                 platform_id=message.platform_id,
+                page_id=message.page_id,
+                sender_id=message.sender_id,
+                user_message=user_display_msg,
+                bot_reply=static_reply,
                 summary="User uploaded a prescription image. Waiting for manual doctor review on dashboard.",
-                last_bot_message=static_reply,
             )
 
             count_request()
             return static_reply, None
 
+        not_prescription_reply = (
+            "عذراً، يبدو أن الصورة المرفقة ليست روشتة طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل."
+        )
+        ClientService.save_chat_exchange(
+            platform_id=message.platform_id,
+            page_id=message.page_id,
+            sender_id=message.sender_id,
+            user_message=message.text or "📷 [صورة غير واضحة]",
+            bot_reply=not_prescription_reply,
+        )
+        
         return (
-            "عذراً، يبدو أن الصورة المرفقة ليست روشتة طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل.",
+            not_prescription_reply,
             None,
         )
 
@@ -347,3 +392,92 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
             "عذرًا، حدث خطأ أثناء معالجة الصورة المرفقة. يرجى المحاولة مرة أخرى.",
             None,
         )
+
+
+def handle_multi_image_messages(image_messages: list, page, combined_text: str = "") -> tuple[str, bytes | None]:
+    """معالجة عدة صور روشتات معاً بذكاء وفصل الروشتات المقروءة عن التي تحتاج مراجعة الطبيب."""
+    all_extracted_texts = []
+    unreadable_prescriptions_count = 0
+    total_ocr_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    for idx, msg in enumerate(image_messages):
+        try:
+            image_url = msg.media.get("url") if msg.media else None
+            if not image_url:
+                continue
+
+            img_res = requests.get(image_url, timeout=30)
+            if img_res.status_code != 200:
+                continue
+
+            project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            uploads_dir = os.path.join(project_dir, "static", "uploads")
+            os.makedirs(uploads_dir, exist_ok=True)
+            image_path = os.path.join(uploads_dir, f"{uuid.uuid4().hex}.jpg")
+
+            with open(image_path, "wb") as f:
+                f.write(img_res.content)
+
+            # تشغيل OCR على كل صورة
+            ocr_result = process_prescription_ocr(
+                image_path=image_path,
+                phone_number="",
+                comes_from=f"{msg.platform_name}:{msg.sender_id}:{msg.page_id}",
+                laboratory_id=page.laboratory_id,
+            )
+
+            # تجميع استهلاك الـ OCR
+            usage = ocr_result.get("ocr_usage")
+            if usage:
+                total_ocr_usage["input_tokens"] += usage.get("input_tokens", 0)
+                total_ocr_usage["output_tokens"] += usage.get("output_tokens", 0)
+                total_ocr_usage["total_tokens"] += usage.get("total_tokens", 0)
+
+            # ✅ 1. الروشتة الناجحة فقط (ثقة 90% فأكثر)
+            if ocr_result.get("success"):
+                extracted = ocr_result.get("extracted_text", "")
+                all_extracted_texts.append(f"--- [Prescription Image #{idx+1} - Confirmed] ---\n{extracted}")
+
+            # ⏳ 2. الروشتة غير الواضحة (ثقة منخفضة) -> مراجعة الطبيب
+            elif ocr_result.get("classified_as") == "prescription":
+                unreadable_prescriptions_count += 1
+
+        except Exception as e:
+            print(f"[Multi-OCR Error] image #{idx+1}: {e}")
+
+    # 🎯 الحالة الأولى: كل الروشتات المرفقة تحتاج مراجعة الطبيب (لم تنجح أي واحدة بنسبة 90%)
+    if not all_extracted_texts and unreadable_prescriptions_count > 0:
+        static_reply = "لقد استلمنا صورتك وسيقوم الطبيب بمراجعتها والرد عليك."
+        last_msg = image_messages[-1]
+        ClientService.save_chat_exchange(
+            platform_id=last_msg.platform_id,
+            page_id=last_msg.page_id,
+            sender_id=last_msg.sender_id,
+            user_message=last_msg.text or "📷 [تم إرسال صورة روشتة طبية]",
+            bot_reply=static_reply,
+            summary="User uploaded a prescription image. Waiting for manual doctor review on dashboard.",
+        )
+        count_request()
+        return static_reply, None
+
+    # 🎯 الحالة الثانية: توجد روشتة واحدة على الأقل واضحة وناجحة (90%+)
+    if all_extracted_texts:
+        merged_ocr = "\n\n".join(all_extracted_texts)
+        if unreadable_prescriptions_count > 0:
+            merged_ocr += f"\n\n[Doctor Review Note]: ({unreadable_prescriptions_count} other uploaded prescription image(s) had unclear handwriting and was sent to the doctor for manual review. Inform the patient politely.)"
+
+        last_msg = image_messages[-1]
+        last_msg.text = f"[Prescription OCR Extracted Text]:\n{merged_ocr}\n\nUser Notes: {combined_text}"
+        return run_agent(last_msg, ocr_usage=total_ocr_usage)
+
+    # 🎯 الحالة الثالثة: الصور المرفقة ليست روشتات طبية
+    not_presc_reply = "عذراً، يبدو أن الصور المرفقة ليست روشتات طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل."
+    last_msg = image_messages[-1]
+    ClientService.save_chat_exchange(
+        platform_id=last_msg.platform_id,
+        page_id=last_msg.page_id,
+        sender_id=last_msg.sender_id,
+        user_message=last_msg.text or "📷 [صورة غير واضحة]",
+        bot_reply=not_presc_reply,
+    )
+    return not_presc_reply, None

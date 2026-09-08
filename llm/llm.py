@@ -9,4 +9,6 @@ def get_gemini():
         model="gemini-3.1-flash-lite",
         google_api_key=api_key,
         temperature=0.0,
+        max_output_tokens=2048,
+        max_retries=2,
     )   

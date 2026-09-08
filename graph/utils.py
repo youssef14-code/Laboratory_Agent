@@ -26,7 +26,6 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from knowledge.schemas import AliasNames
 from models.models import RequestCounter, db
 
 
@@ -181,10 +180,11 @@ def generate_booking_pdf(
     story = []
 
     # Header / Logo
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.jpeg")
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
     if os.path.exists(logo_path):
         logo = Image(logo_path, width=42 * mm, height=26 * mm)
     else:
+        print(f"[generate_booking_pdf] WARNING: logo missing at {logo_path} — ticket generated without it (reference_id={reference_id})")
         logo = Paragraph("", _ps("empty", font, 1))
 
     title_table = Table(
@@ -250,6 +250,9 @@ def generate_booking_pdf(
         ("Required Analysis", "التحاليل المطلوبة", details),
         ("Address", "العنوان التفصيلي", address),
     ]
+    missing_fields = [en_lbl for en_lbl, _, val in fields if not val]
+    if missing_fields:
+        print(f"[generate_booking_pdf] WARNING: empty field(s) {missing_fields} for reference_id={reference_id} — will render as '—'")
 
     label_col_w = 78 * mm
     val_col_w = usable_w - label_col_w
@@ -327,7 +330,7 @@ def generate_booking_image(
         reference_id=reference_id,
         address=address,
     )
-    
+
     # تحويل الـ PDF لـ PNG بـ pymupdf
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     page = doc[0]
@@ -335,44 +338,57 @@ def generate_booking_image(
     pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
     png_bytes = pix.tobytes("png")
     doc.close()
-    
+
     return png_bytes
 
 
 # ── Parsing Helpers ───────────────────────────────────────────────────────────
+#
+# alias_names و keywords بقوا متخزنين كـ JSON list في MySQL (db.JSON)، يعني
+# SQLAlchemy بيرجعهم كـ list بايثون جاهز من غير أي حاجة تتعمل. الدوال دي
+# لسه موجودة كطبقة أمان بسيطة فقط (لو القيمة جت None أو بشكل غير متوقع)،
+# مش عشان تفك تنسيق نصي معقد زي الأول.
+#
+# ملحوظة: AliasNames اتشالت من knowledge.schemas — alias_names بقى flat
+# list بسيط، فمفيش تمييز بين "alias" أساسي و"aliases" فرعية بعد كده.
+# أي كود تاني كان بيقرأ .alias أو .aliases من الناتج، لازم يتعدّل يتعامل
+# مع list عادي بدل كده.
 
-def parse_alias_names(value) -> AliasNames:
-    """يحول القيمة المخزنة لـ AliasNames object"""
-    if isinstance(value, AliasNames):
-        return value
+def parse_alias_names(value) -> list[str]:
+    """يتأكد إن القيمة list[str] صالحة، مهما كان شكلها الخام."""
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+
     if isinstance(value, dict):
-        return AliasNames(**value)
+        # توافقية مع أي صف قديم لسه متخزن بالشكل القديم {alias, aliases}
+        merged = []
+        if value.get("alias"):
+            merged.append(str(value["alias"]).strip())
+        for v in value.get("aliases", []) or []:
+            v = str(v).strip()
+            if v and v not in merged:
+                merged.append(v)
+        return merged
+
     if not isinstance(value, str) or not value.strip():
-        return AliasNames()
+        return []
 
     value = value.strip()
 
-    if value.startswith("{"):
+    # توافقية مع نص JSON قديم
+    if value.startswith("[") or value.startswith("{"):
         try:
-            return AliasNames(**json.loads(value))
-        except (json.JSONDecodeError, TypeError):
-            pass
+            parsed = json.loads(value)
+            return parse_alias_names(parsed)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(value)
+                return parse_alias_names(parsed)
+            except Exception:
+                pass
 
-    result = {}
-    list_match = re.search(r"aliases=(\[.*\])\s*$", value)
-    if list_match:
-        try:
-            result["aliases"] = ast.literal_eval(list_match.group(1))
-        except Exception:
-            result["aliases"] = []
-        value = value[: list_match.start()]
-
-    for field in ["alias", "measurement", "equivalent_name"]:
-        m = re.search(fr"{field}='((?:[^'\\]|\\.)*)'", value)
-        if m:
-            result[field] = m.group(1)
-
-    return AliasNames(**result)
+    # توافقية مع نص CSV قديم
+    return [v.strip() for v in value.split(",") if v.strip()]
 
 
 def parse_keywords(value) -> list[str]:

@@ -3,10 +3,10 @@ from .schemas import GeneratedKnowledge
 
 def normalize_knowledge(data: GeneratedKnowledge, item_name: str) -> GeneratedKnowledge:
 
-    data.alias_names.aliases = sorted(
+    data.alias_names = sorted(
         {
             x.strip()
-            for x in data.alias_names.aliases
+            for x in data.alias_names
             if x and x.strip()
         }
     )

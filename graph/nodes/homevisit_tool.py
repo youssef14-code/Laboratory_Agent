@@ -1,9 +1,11 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional, Any
 from langchain_core.tools import tool
 
-from graph.utils import get_platform_name
 from software_service.homevisit_service import HomeVisitService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -17,38 +19,45 @@ class HomeVisitResult:
 def save_visit_tool(
     name: str,
     phone_number: str,
-    date: str,
-    details: str,
     address: str,
+    details: str,
+    date: str,
     comes_from: str = "unknown",
-    branch_id: int | None = None,
 ) -> HomeVisitResult:
     """
-    Save a confirmed appointment booking to the database.
-    Returns a HomeVisitResult.
+    Saves a fully collected and confirmed home visit booking to the database.
+    
+    All 5 main fields (name, phone_number, address, details, date) are strictly required.
+    Returns a HomeVisitResult with success=True and the saved visit object upon success.
     """
-    platform_name = get_platform_name(comes_from)
+    try:
+        # إنشاء الحجز في قاعدة البيانات
+        visit, message = HomeVisitService.create_visit(
+            name=name.strip(),
+            phone_number=phone_number.strip(),
+            date=str(date).strip(),
+            details=details.strip(),
+            address=address.strip(),
+            comes_from=comes_from.strip(),
+        )
 
-    # استدعاء دالة إنشاء الزيارة بدون branch_id
-    res = HomeVisitService.create_visit(
-        name=name,
-        phone_number=phone_number,
-        date=date,
-        details=details,
-        address=address,
-        comes_from=platform_name,
-    )
+        is_success = visit is not None
 
-    # التعامل الآمن مع القيمة المرجعة
-    if isinstance(res, tuple):
-        visit, message = res
-    else:
-        visit, message = res, "تم الحفظ بنجاح"
+        if is_success:
+            logger.info("Successfully saved Homevisit reference=%s for patient=%s", visit.reference_id, name)
+        else:
+            logger.warning("Failed to save Homevisit for patient=%s: %s", name, message)
 
-    is_success = visit is not None
+        return HomeVisitResult(
+            success=is_success,
+            message=message,
+            visit=visit,
+        )
 
-    return HomeVisitResult(
-        success=is_success,
-        message=message,
-        visit=visit,
-    )
+    except Exception as e:
+        logger.error("Exception in save_visit_tool for patient=%s: %s", name, e)
+        return HomeVisitResult(
+            success=False,
+            message=f"حدث خطأ غير متوقع أثناء حفظ الحجز: {str(e)}",
+            visit=None,
+        )

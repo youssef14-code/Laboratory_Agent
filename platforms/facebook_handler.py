@@ -1,7 +1,8 @@
 import io
 import json
 import logging
-
+import os
+from time import time
 import requests
 
 from platforms.base_handler import BaseHandler
@@ -75,101 +76,116 @@ class FacebookHandler(BaseHandler):
         self,
         recipient_id: str,
         file_bytes: bytes,
-        filename: str = "ticket.png",
+        filename: str = "booking_ticket.png",
         mime_type: str = "image/png",
     ):
-        logger.debug("[FB SEND IMAGE] to=%s file=%s", recipient_id, filename)
+        print(f"[FB SEND IMAGE] Sending image to={recipient_id} | size={len(file_bytes)} bytes")
 
-        recipient_json = json.dumps({"id": recipient_id})
-        message_json   = json.dumps({
+        recipient_json = json.dumps({"id": str(recipient_id)})
+        message_json = json.dumps({
             "attachment": {
                 "type": "image",
-                "payload": {"is_reusable": False},
+                "payload": {}
             }
         })
 
-        try:
-            response = requests.post(
-                f"{self.base_url}/me/messages",
-                params=self.params,
-                data={
-                    "messaging_type": "RESPONSE",
-                    "recipient":      recipient_json,
-                    "message":        message_json,
-                },
-                files={
-                    "filedata": (filename, io.BytesIO(file_bytes), mime_type),
-                },
-                timeout=30,
-            )
-            if response.status_code not in [200, 201]:
-                logger.error(
-                    "[FB IMAGE ERROR] status=%s body=%s",
-                    response.status_code, response.text,
+        # نتأكد أن الملف bytes جاهز للإرسال
+        raw_data = file_bytes.getvalue() if hasattr(file_bytes, "getvalue") else file_bytes
+
+        # 🔄 محاولة الإرسال مع Retry (3 محاولات) في حال تقلب الإنترنت
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(
+                    f"{self.base_url}/me/messages",
+                    params=self.params,
+                    data={
+                        "recipient": recipient_json,
+                        "message": message_json,
+                    },
+                    files={
+                        "filedata": (filename, raw_data, mime_type),
+                    },
+                    timeout=(15, 60),  # 15s للاتصال و 60s لرفع الصورة
                 )
-            return response
-        except Exception as e:
-            logger.error("[FB IMAGE ERROR] %s", e)
-            return None
+
+                print(f"[FB SEND IMAGE RESPONSE] attempt={attempt} | status={response.status_code} | body={response.text}")
+
+                if response.status_code in [200, 201]:
+                    logger.info("[FB] ✅ Image sent successfully to recipient=%s", recipient_id)
+                    return response
+                else:
+                    logger.error("[FB IMAGE ERROR] status=%s body=%s", response.status_code, response.text)
+
+            except Exception as e:
+                print(f"[FB IMAGE ERROR] Attempt {attempt}/{max_retries} failed: {e}")
+                logger.error("[FB IMAGE ERROR] Attempt %s/%s failed: %s", attempt, max_retries, e)
+                if attempt == max_retries:
+                    return None
+                time.sleep(1)  # انتظار ثانية قبل المحاولة التالية
+
+        return None
     # ── typing indicator ─────────────────────────────────────────────────────
 
     def send_typing(self, recipient_id: str):
-        """Show typing indicator in Messenger."""
-        logger.debug("[FB TYPING] to=%s", recipient_id)
-        payload = {
-            "recipient":     {"id": recipient_id},
-            "sender_action": "typing_on",
-        }
-        return self._post_json(f"{self.base_url}/me/messages", payload)
-
-    # ── comments ─────────────────────────────────────────────────────────────
-
-    def handle_comment(self, comment_id: str, page_id: str):
-        self.react_to_comment(comment_id)
-        self.reply_to_comment(comment_id)
-        self.send_private_reply(
-            page_id,
-            self.token,
-            comment_id,
-            "أهلاً! شكراً على تعليقك، كيف نقدر نساعدك؟"
-        )
-
-    def react_to_comment(self, comment_id: str):
-        logger.debug("[FB LIKE COMMENT] comment_id=%s", comment_id)
+        """إرسال إشارة 'تمت القراءة' و 'جاري الكتابة...' للمستخدم."""
+        # قراءة التوكن من الـ .env مباشرة أو من كائن الصفحة
+        token = os.environ.get("FB_PAGE_ACCESS_TOKEN") or os.environ.get("PAGE_ACCESS_TOKEN") or getattr(self, "access_token", None)
+        if not token:
+            return
+        url = "https://graph.facebook.com/v19.0/me/messages"
+        params = {"access_token": token}
+        # 1. إرسال mark_seen
         try:
-            response = requests.post(
-                f"{self.base_url}/{comment_id}/likes",
-                params=self.params,
-                timeout=10,
+            requests.post(
+                url,
+                params=params,
+                json={"recipient": {"id": recipient_id}, "sender_action": "mark_seen"},
+                timeout=3,
             )
-            if response.status_code not in [200, 201]:
-                logger.error("[FB LIKE ERROR] status=%s body=%s", response.status_code, response.text)
-            return response
+        except Exception:
+            pass
+        # 2. إرسال typing_on
+        try:
+            requests.post(
+                url,
+                params=params,
+                json={"recipient": {"id": recipient_id}, "sender_action": "typing_on"},
+                timeout=3,
+            )
+        except Exception:
+            pass
+
+    # ── comments handling (Like + Public Reply + Private Reply) ─────────────
+
+    def like_comment(self, comment_id: str):
+        """1. عمل Like على كومنت العميل من الصفحة."""
+        logger.debug("[FB LIKE COMMENT] comment_id=%s", comment_id)
+        url = f"{self.base_url}/{comment_id}/likes"
+        try:
+            return requests.post(url, params=self.params, timeout=10)
         except Exception as e:
-            logger.error("[FB LIKE ERROR] %s", e)
+            logger.error("[FB LIKE COMMENT ERROR] %s", e)
             return None
 
     def reply_to_comment(
         self,
         comment_id: str,
-        static_message: str = "شكراً على تعليقك! راسلنا خاصةً للمساعدة. 🙏",
+        static_message: str = "تم الرد في الخاص يا فندم 🙏",
     ):
-        """Reply publicly to a comment with a static message."""
-        logger.debug("[FB COMMENT REPLY] comment_id=%s", comment_id)
+        """2. رد عام تحت الكومنت."""
+        logger.debug("[FB PUBLIC COMMENT REPLY] comment_id=%s", comment_id)
         payload = {"message": static_message}
-        return self._post_json(
-            f"{self.base_url}/{comment_id}/comments", payload
-        )
+        return self._post_json(f"{self.base_url}/{comment_id}/comments", payload)
 
-    def send_private_reply(self, page_id, page_access_token: str, comment_id: str, text: str):
-        """
-        Send a private reply (Messenger message) to a user who commented on your Page's post.
-        Requirements:
-          - Use a valid Page access token
-          - Comment must be on a Page-owned post
-          - Only works within 7 days of the comment
-          - Only one private reply per comment
-        """
+    def send_private_reply(
+        self,
+        page_id: str,
+        page_access_token: str,
+        comment_id: str,
+        text: str = "أهلاً بحضرتك في معامل د/ ماجد صفوت شاكر! حابب نساعد حضرتك إزاي اليوم؟",
+    ):
+        """3. إرسال رسالة خاصة على ماسنجر للشخص صاحب الكومنت."""
         logger.debug("[FB PRIVATE REPLY] comment_id=%s page_id=%s", comment_id, page_id)
 
         url = f"{self.base_url}/{page_id}/messages"
@@ -177,25 +193,43 @@ class FacebookHandler(BaseHandler):
         payload = {
             "recipient": {"comment_id": comment_id},
             "message": {"text": text},
-            "messaging_type": "RESPONSE"
+            "messaging_type": "RESPONSE",
         }
-
-        response = requests.post(url, params=params, json=payload)
 
         try:
-            data = response.json()
-        except ValueError:
-            data = {"raw": response.text}
+            response = requests.post(url, params=params, json=payload, timeout=10)
+            if response.status_code not in [200, 201]:
+                logger.error("[FB PRIVATE REPLY ERROR] status=%s body=%s", response.status_code, response.text)
+            return response
+        except Exception as e:
+            logger.error("[FB PRIVATE REPLY ERROR] %s", e)
+            return None
 
-        if response.status_code not in [200, 201]:
-            logger.error("[FB PRIVATE REPLY ERROR] status=%s body=%s", response.status_code, data)
+    def handle_comment(
+        self,
+        comment_id: str,
+        public_msg: str = "تم الرد في الخاص يا فندم 🙏",
+        private_msg: str = "أهلاً بحضرتك في معامل د/ ماجد صفوت شاكر! حابب نساعد حضرتك إزاي اليوم؟",
+    ):
+        """معالجة الكومنت الجديد بتنفيذ الـ 3 خطوات معاً."""
+        print(f"\n💬 [FB COMMENT] New Comment detected: id={comment_id}")
 
-        return {
-            "status": response.status_code,
-            "ok": response.ok,
-            "data": data
-        }
+        # 1. لايك
+        self.like_comment(comment_id)
 
+        # 2. رد عام تحت الكومنت
+        if public_msg:
+            self.reply_to_comment(comment_id, static_message=public_msg)
+
+        # 3. رسالة خاصة على الماسنجر
+        if private_msg:
+            self.send_private_reply(
+                page_id=self.page_id,
+                page_access_token=self.token,
+                comment_id=comment_id,
+                text=private_msg,
+            )
+        print(f"✅ [FB COMMENT] Like + Public Reply + Private Message sent successfully!\n")
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _post_json(self, url: str, payload: dict):

@@ -57,7 +57,7 @@ def run_post_approval_stage(entity_id: int, entity_type: EntityType, name: str,
         name=name,
         description=final_knowledge.description,
         keywords=final_knowledge.keywords,
-        aliases=final_knowledge.alias_names.aliases,
+        aliases=final_knowledge.alias_names,
     )
     embedding = generate_embedding(search_text)
 

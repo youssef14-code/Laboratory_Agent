@@ -60,7 +60,7 @@ class LaboratoryService(BaseService):
             lab.name = name.strip()
         
         if info is not None:
-            lab.info = info.strip() if info else None
+            lab.info = info.strip() if info else ""
 
         return BaseService.update_commit(lab, success_msg="تم تحديث بيانات المعمل بنجاح", error_prefix="حدث خطأ أثناء التحديث")
 

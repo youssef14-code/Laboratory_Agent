@@ -106,7 +106,7 @@
           </td>
           <td>
             {% if lab.sample_type %}
-              <span class="pill pill-reviewed" style="background:rgba(99,102,241,.1);color:#818cf8;border:none;">{{ lab.sample_type }}</span>
+              <span class="pill pill-reviewed" style="background:rgba(217,31,38,.1);color:#d91f26;border:none;">{{ lab.sample_type }}</span>
             {% else %}
               <span class="text-muted">—</span>
             {% endif %}
@@ -116,7 +116,7 @@
           </td>
           <td>
             <div style="display:flex;gap:.4rem;align-items:center;">
-              <a href="{{ url_for('review_lab_knowledge', lab_id=lab.id) }}" class="btn btn-ghost btn-sm" title="المعرفة الذكية" style="color:#8b5cf6;border-color:rgba(139,92,246,0.2);">
+              <a href="{{ url_for('review_lab_knowledge', lab_id=lab.id) }}" class="btn btn-ghost btn-sm" title="المعرفة الذكية" style="color:#d91f26;border-color:rgba(217,31,38,0.2);">
                 ✨ المعرفة
               </a>
               <a href="{{ url_for('edit_lab', lab_id=lab.id) }}" class="btn btn-ghost btn-sm">تعديل</a>

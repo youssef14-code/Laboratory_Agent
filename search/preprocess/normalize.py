@@ -1,76 +1,48 @@
 import re
 import unicodedata
 
-# Common conversational words that add no search value.
-STOP_WORDS = {
+# 1. كلمات عامة (Conversational & Stop Words)
+GENERAL_STOP_WORDS = {
     # English
-    "a", "an", "the",
-    "and", "or", "but",
-    "if", "then", "else",
-    "when", "where", "why",
-    "how", "what", "which",
-    "is", "are", "was", "were",
-    "can", "could", "would",
-    "please",
+    "a", "an", "the", "and", "or", "but", "if", "then", "else",
+    "when", "where", "why", "how", "what", "which", "is", "are",
+    "was", "were", "can", "could", "would", "please",
 
-    # Arabic
-    "في", "على", "من", "الى", "إلى",
-    "عن", "مع", "حتى", "بعد", "قبل",
-    "خلال", "بين", "حول", "تحت", "فوق",
-    "امام", "أمام", "خلف", "داخل", "خارج",
-    "او", "أو", "و", "ثم", "كما",
-    "هل", "لو", "اذا", "إذا",
-    "هذا", "هذه", "ذلك", "تلك",
-    "هو", "هي", "هم", "انا", "أنا",
-    "انت", "أنت", "انتي", "أنتي",
-    "احنا", "نحن",
+    # Arabic Prepositions & Pronouns
+    "في", "علي", "على", "من", "الي", "إلى", "الى", "عن", "مع", "حتي", "حتى",
+    "بعد", "قبل", "خلال", "بين", "حول", "تحت", "فوق", "امام", "خلف", "داخل", "خارج",
+    "او", "ثم", "كما", "هل", "لو", "اذا", "هذا", "هذه", "ذلك", "تلك",
+    "هو", "هي", "هم", "انا", "انت", "انتي", "احنا", "نحن",
 
     # Egyptian dialect
-    "عايز", "عايزة", "عايزين", "عايزه",
-    "عاوز", "عاوزه", "عاوزين",
-    "محتاج", "محتاجة", "محتاجين",
-    "ممكن",
-    "سمحت",
-    "لوسمحت",
-    "بعداذنك",
-    "بعدإذنك",
-    "نفسي",
-    "حابب",
-    "حابه",
-    "حابين",
-    "ياريت",
-    "فين",
-    "عندكم",
-    "عندكو",
-    "عندكوا",
-    "فيه",
-    "فيها",
-    "فيهم",
-    "اي",
-    "إيه",
-    "ايه",
-    "ايش",
-    "ده",
-    "دى",
-    "دي",
-    "دول",
-    "بقى",
-    "بقا",
-    "كده",
-    "كدا",
-    "بس",
-    "كمان",
-    "برضو",
-    "بردو",
-    "خالص",
-    "اوي",
-    "قوي",
-    "تمام",
-    "تماما",
-    "ماشي",
-    "اوكي",
-    "اوك",
+    "عايز", "عايزه", "عايزين", "عاوز", "عاوزه", "عاوزين", "محتاج", "محتاجه", "محتاجين",
+    "ممكن", "سمحت", "لوسمحت", "لو", "بعداذنك", "نفسي", "حابب", "حابه", "حابين", "ياريت",
+    "فين", "عندكم", "عندكو", "عندكوا", "فيه", "فيها", "فيهم", "اي", "ايه", "ايش",
+    "ده", "دي", "دول", "بقي", "بقا", "كده", "كدا", "بس", "كمان", "برضو", "بردو",
+    "خالص", "اوي", "قوي", "تمام", "تماما", "ماشي", "اوكي", "اوك", "بتاع", "بتاعة", "بتاعت",
 }
+
+# 2. كلمات المجال الطبي والمخبري التي تسبب تشويش في الاسكور (Domain-Specific Noise Words)
+MEDICAL_STOP_WORDS = {
+    # عربي (بكل أشكال المفرد والجمع والتعريف)
+    "تحليل", "التحليل", "تحاليل", "التحاليل", "تحليلات",
+    "فحص", "الفحص", "فحوصات", "الفحوصات", "فحوص", "الفحوص",
+    "اختبار", "الاختبار", "اختبارات", "الاختبارات",
+    "كشف", "الكشف", "كشوفات", "اشعه", "اشعة", "الاشعة", "الاشعه",
+    "رسم", "الرسم", "مقياس", "قياس", "معمل", "المعمل", "لاب",
+    "نسبه", "نسبة", "النسبه", "النسبة", "معدل", "المعدل", "فحصين", "تحليلين",
+
+    # English medical noise words
+    "test", "tests", "testing",
+    "analysis", "analyses",
+    "check", "checkup", "checks",
+    "exam", "examination", "examinations",
+    "profile", "panel", "screen", "screening",
+    "level", "levels", "count", "rate",
+    "lab", "laboratory", "scan", "assay",
+}
+
+STOP_WORDS = GENERAL_STOP_WORDS | MEDICAL_STOP_WORDS
 
 ARABIC_REPLACEMENTS = {
     "أ": "ا",
@@ -86,45 +58,47 @@ ARABIC_REPLACEMENTS = {
 
 def normalize(text: str) -> str:
     """
-    Normalize user text before searching.
-
-    Steps:
+    Normalize user query or database candidate before fuzzy matching:
     1. lowercase
-    2. remove Arabic diacritics
-    3. normalize Arabic letters
+    2. remove diacritics (tashkeel)
+    3. normalize Arabic letters (أ/إ/آ -> ا, ة -> ه, ى -> ي)
     4. remove punctuation
-    5. collapse spaces
-    6. remove stop words
+    5. strip domain noise words (تحليل, فحص, test, etc.) and general stop words
     """
-
     if not text:
         return ""
 
-    # lowercase
+    # 1. Lowercase
     text = text.lower()
 
-    # remove tashkeel
+    # 2. Remove Tashkeel
     text = "".join(
         c
         for c in unicodedata.normalize("NFD", text)
         if unicodedata.category(c) != "Mn"
     )
 
-    # normalize Arabic letters
+    # 3. Normalize Arabic letters
     for old, new in ARABIC_REPLACEMENTS.items():
         text = text.replace(old, new)
 
-    # replace punctuation with spaces
+    # 4. Replace punctuation & special chars with spaces
     text = re.sub(r"[^\w\s]", " ", text)
 
-    # remove duplicated spaces
+    # 5. Remove duplicated spaces
     text = re.sub(r"\s+", " ", text).strip()
 
-    # remove stop words
-    tokens = [
+    # 6. Filter Stop Words & Medical Noise Words
+    tokens = text.split()
+    filtered_tokens = [
         token
-        for token in text.split()
+        for token in tokens
         if token not in STOP_WORDS
     ]
 
-    return " ".join(tokens)
+    # حماية: إذا كان نص البحث بالكامل عبارة عن كلمة stop word فقط (مثلاً العميل كتب "تحليل")
+    # نرجع التوكنز الأصلية عشان النص ميبقاش فاضي تماماً
+    if not filtered_tokens and tokens:
+        return " ".join(tokens)
+
+    return " ".join(filtered_tokens)

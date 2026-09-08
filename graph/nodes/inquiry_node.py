@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage
+import re
 
 from graph.schemas.inquiry_schema import InquiryResponse
 from graph.state import AgentState
@@ -26,62 +27,43 @@ RULES
 9. Always display prices in Egyptian Pounds (EGP). Never use Saudi Riyals (SAR) or any other currency.
 
 ====================
-LAB INFORMATION FORMATTING
+LAB INFORMATION FORMATTING (STRICT RULES)
 ====================
+When presenting laboratory tests from Retrieved Knowledge, format EACH test EXACTLY like this:
+🧪 [Test Name]
+📋 التحضير: [Preparation instructions]
+⏱️ مدة ظهور النتيجة: [Result turnaround time]
+⛔ STRICT PRICING RULES (NEVER VIOLATE):
+1. NEVER write a price line (like "💰 السعر" or "💰 Price") under any individual test block, whether it is one test or multiple tests.
+2. The ONLY price allowed in your entire reply is the single final TOTAL line at the very bottom:
+   💰 الإجمالي: [Total Sum] جنيه
+3. Leave a blank line between tests when listing more than one.
+4. If preparation or result time is missing for a test, omit that specific line entirely.
+5. If pricing for any test is unavailable, do NOT invent numbers — state:
+   "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
 
-don't give the user any test or lab without this FORMATIING
+====================
+LIST MODIFICATION RULES (تعديل القائمة: ضيف / شيل / بدل)
+====================
+When the patient asks to modify the previously discussed test list:
+1. "ضيف / زود / كمان / عليهم" (Add): Combine the new requested test with the previous tests found in "Last Bot Message".
+2. "شيل / احذف" (Remove): Remove that specific test from the previous list.
+3. "بدل / استبدل" (Replace): Replace the specified test with the new requested test.
 
-When presenting laboratory tests from the Retrieved Knowledge, there are
-TWO cases depending on how many tests are being presented:
+Always present the FULL resulting updated list (all active tests), following the exact formatting rules above with ONLY the single final total line at the bottom:
+💰 الإجمالي: [Total Sum] جنيه
 
---------------------
-CASE A — Single test
---------------------
-The user is asking about exactly ONE specific test. Use this exact
-structure:
+====================
+CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
+====================
+1. ⏳ CHRONOLOGICAL ORDER:
+   - The "RECENT CHAT HISTORY" is strictly ordered from OLDEST to NEWEST.
+   - The exchange at the bottom is the MOST RECENT past interaction.
+   - Always prioritize the latest user statements, corrections, or updates over older ones.
+2. 🔗 CONTEXT & PRONOUN RESOLUTION:
+   - If the user uses referring phrases (e.g., "نفس اللي قولتلك عليه", "زي ما اتفقنا", "غيرت رأيي", "التحليل اللي سألت عنه فوق"), trace backwards through the Chat History from bottom to top to resolve the exact context.
+   - Combine the immediate flow from Chat History with the long-term facts from the Cumulative Summary.   
 
-🧪 Test Name
-💰 Price: ...
-📋 Preparation: ...
-⏱️ Result: ...
-
---------------------
-CASE B — Multiple tests (e.g. a prescription/روشتة, or the user names
-several tests, or a general checkup lookup returns several tests)
---------------------
-Do NOT show a price line next to each individual test. List each test
-using ONLY:
-
-🧪 Test Name
-📋 Preparation: ...
-⏱️ Result: ...
-
-Then, after ALL the tests are listed, add ONE final line with the combined
-total price of every test found in the Retrieved Knowledge, e.g.:
-
-💰 الإجمالي: ... جنيه
-
-Rules for both cases:
-
-- Leave a blank line between tests when listing more than one.
-- Only include a line if that piece of information exists in the Retrieved
-  Knowledge.
-- If a field (price, preparation, result time) is not available, omit that
-  line entirely instead of guessing or writing "not available".
-- If, in CASE B, the price is missing for one or more of the listed tests,
-  do not compute a partial/misleading total — instead state that the full
-  total isn't available because pricing for some tests is missing.
-- Never invent or estimate any value that is missing.
-- Do not add extra fields beyond Test Name, Price, Preparation, and Result
-  unless that additional information is explicitly present in the
-  Retrieved Knowledge.
-- Keep replies short and chat-appropriate — do not turn this into a long
-  paragraph.
-- Do not repeat the same test information twice in one response.
-
-If the patient asks about a test that is not found in the Retrieved
-Knowledge, do not use this format — instead, politely state that the
-information is not available.
 """
 
 
@@ -95,15 +77,18 @@ def inquiry_node(state: AgentState) -> dict:
 
     current_summary = state.get("summary") or ""
     last_bot_message = state.get("last_bot_message") or ""
+    chat_history = state.get("chat_history") or ""
 
     rag_context = state.get("rag_context", "")
+    # حساب الإجمالي مسبقاً بالبايثون وحقنه في السياق
 
     llm = get_gemini()
     structured_llm = llm.with_structured_output(
         InquiryResponse,
+        method="json_schema",
         include_raw=True,
     )
-
+    
     system_prompt = f"""
 {INQUIRY_SYSTEM_PROMPT}
 
@@ -122,6 +107,12 @@ Summary:
 
 Last Bot Message:
 {last_bot_message}
+
+====================
+RECENT CHAT HISTORY (Last Exchanges)
+====================
+{chat_history or "(No previous chat history)"}
+
 """
 
     messages = [
@@ -168,14 +159,28 @@ Last Bot Message:
 
     clean_reply = parsed.reply
 
+    # 🧮 حساب الإجمالي بالبايثون 100% بدقة واستبداله في الرد لضمان عدم وجود أي خطأ رياضي
+    if parsed.test_prices:
+        exact_total = int(sum(parsed.test_prices))
+        if "💰 الإجمالي:" in clean_reply:
+            clean_reply = re.sub(
+                r'💰\s*الإجمالي\s*:.*',
+                f'💰 الإجمالي: {exact_total} جنيه',
+                clean_reply,
+            )
+        else:
+            clean_reply = clean_reply.strip() + f"\n\n💰 الإجمالي: {exact_total} جنيه"
+
+
     try:
 
-        ClientService.update_client_summary_and_last_bot_message(
-            sender_id=sender_id,
-            page_id=page_id,
+        ClientService.save_chat_exchange(
             platform_id=platform_id,
+            page_id=page_id,
+            sender_id=sender_id,
+            user_message=user_message,
+            bot_reply=clean_reply,
             summary=parsed.summary,
-            last_bot_message=clean_reply,
         )
 
     except Exception as e:

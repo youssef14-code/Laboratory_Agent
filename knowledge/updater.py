@@ -42,7 +42,9 @@ def update_knowledge(approved: ApprovedKnowledge) -> None:
             {
                 "description": approved.description,
                 "keywords": json.dumps(approved.keywords, ensure_ascii=False),
-                "alias_names": json.dumps(approved.alias_names.model_dump(), ensure_ascii=False),
+                # alias_names بقى list[str] عادي (مش AliasNames object)، فمفيش
+                # داعي لـ .model_dump() -- json.dumps مباشرة على الـ list.
+                "alias_names": json.dumps(approved.alias_names, ensure_ascii=False),
                 "sample_type": approved.sample_type,
                 "search_text": approved.search_text,
                 "id": approved.entity_id,

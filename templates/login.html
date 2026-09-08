@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تسجيل الدخول — معامل د/ ماجد صفوت شاكر للتحاليل الطبية</title>
+  <title>تسجيل الدخول — معامل د/ صفوت شاكر للتحاليل الطبية</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -33,7 +33,7 @@
     /* ── Left panel (brand) ── */
     .login-brand-panel {
       flex: 1;
-      background: linear-gradient(145deg, #1e2a4a 0%, #16213e 60%, #0d1b35 100%);
+      background: linear-gradient(145deg, #211412 0%, #541417 58%, #9f171d 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -50,7 +50,7 @@
       left: -80px;
       width: 300px;
       height: 300px;
-      background: radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(245,160,0,0.28) 0%, transparent 70%);
       border-radius: 50%;
     }
 
@@ -61,7 +61,7 @@
       right: -60px;
       width: 240px;
       height: 240px;
-      background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(255,210,64,0.18) 0%, transparent 70%);
       border-radius: 50%;
     }
 
@@ -117,7 +117,7 @@
     .brand-divider {
       width: 40px;
       height: 3px;
-      background: linear-gradient(90deg, #6366f1, #818cf8);
+      background: linear-gradient(90deg, var(--primary), var(--brand-gold));
       border-radius: 2px;
       margin: 18px auto 22px auto;
       position: relative;
@@ -147,8 +147,8 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: #818cf8;
-      box-shadow: 0 0 8px rgba(129,140,248,0.7);
+      background: var(--brand-gold);
+      box-shadow: 0 0 8px rgba(245,160,0,0.7);
       flex-shrink: 0;
     }
 
@@ -218,18 +218,18 @@
     }
 
     .login-input:hover {
-      border-color: rgba(99,102,241,0.4);
+      border-color: rgba(217,31,38,0.4);
     }
 
     .login-input:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(217,31,38,0.13);
     }
 
     .login-input:focus + svg,
     .input-wrap:focus-within svg {
-      color: #6366f1;
+      color: var(--primary);
     }
 
     .login-input::placeholder {
@@ -256,7 +256,7 @@
       transition: color 0.2s;
     }
 
-    .pw-toggle:hover { color: #6366f1; }
+    .pw-toggle:hover { color: var(--primary); }
     .pw-toggle svg { width: 17px; height: 17px; }
 
     /* Row: remember me + forgot password */
@@ -292,8 +292,8 @@
     }
 
     .remember-me input[type="checkbox"]:checked {
-      background: #6366f1;
-      border-color: #6366f1;
+      background: var(--primary);
+      border-color: var(--primary);
     }
 
     .remember-me input[type="checkbox"]:checked::after {
@@ -311,7 +311,7 @@
     .login-btn {
       width: 100%;
       padding: 13px;
-      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, #ef542f 100%);
       color: #fff;
       border: none;
       border-radius: 10px;
@@ -325,13 +325,13 @@
       justify-content: center;
       gap: 8px;
       transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-      box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+      box-shadow: 0 4px 16px rgba(217,31,38,0.30);
     }
 
     .login-btn:hover {
       opacity: 0.92;
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+      box-shadow: 0 6px 20px rgba(217,31,38,0.42);
     }
 
     .login-btn:active {
@@ -339,7 +339,7 @@
     }
 
     .login-btn:focus-visible {
-      outline: 2px solid #a5b4fc;
+      outline: 2px solid #ff9b7b;
       outline-offset: 2px;
     }
 
@@ -403,7 +403,7 @@
     <div class="brand-grid"></div>
 
     <div class="brand-icon">
-      <img src="{{ url_for('static', filename='images/logo (2).png') }}" alt="معامل د/ ماجد صفوت شاكر للتحاليل الطبية">
+      <img src="{{ url_for('static', filename='images/logo (2).jpg') }}" alt="معامل د/ صفوت شاكر للتحاليل الطبية">
     </div>
 
     <div class="brand-divider"></div>

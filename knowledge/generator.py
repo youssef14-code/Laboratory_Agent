@@ -29,24 +29,50 @@ def _clean_json_response(raw_text: str) -> dict:
 
 
 def _call_gemini(prompt: str) -> dict:
-    client_or_genai = get_gemini_client()
-    if hasattr(client_or_genai, "models"):
-        response = client_or_genai.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config={"system_instruction": SYSTEM_PROMPT}
-        )
-        return _clean_json_response(response.text)
-    else:
-        model = client_or_genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-        response = model.generate_content(prompt)
-        return _clean_json_response(response.text)
+    """
+    Calls Gemini and returns the parsed JSON dict.
+    Any failure here (network error, blocked/empty response, malformed JSON,
+    unexpected client shape, etc.) is logged and re-raised so the caller's
+    retry loop can handle it uniformly.
+    """
+    try:
+        client_or_genai = get_gemini_client()
+    except Exception as e:
+        logger.warning("Could not obtain Gemini client: %s", e)
+        raise
+
+    try:
+        if hasattr(client_or_genai, "models"):
+            response = client_or_genai.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config={"system_instruction": SYSTEM_PROMPT}
+            )
+        else:
+            model = client_or_genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+            response = model.generate_content(prompt)
+    except Exception as e:
+        logger.warning("Gemini API call failed: %s", e)
+        raise
+
+    raw_text = getattr(response, "text", None)
+    if not raw_text:
+        # Happens e.g. when the response was blocked by safety filters
+        # and has no text candidate at all.
+        raise ValueError("Empty response from Gemini (possibly blocked or filtered).")
+
+    try:
+        return _clean_json_response(raw_text)
+    except json.JSONDecodeError as e:
+        logger.warning("Gemini returned malformed JSON: %s | raw: %s", e, raw_text[:300])
+        raise
 
 
 def generate_knowledge(request: KnowledgeGenerationRequest) -> GeneratedKnowledge:
     """
     Calls the LLM to generate knowledge for a new Lab/Bundle.
-    Retries a couple of times if the model returns malformed JSON.
+    Retries a couple of times if the model returns malformed JSON, an
+    invalid schema, or the API call itself fails (network/rate-limit/etc.).
     """
     prompt = build_generation_prompt(
         name=request.name,
@@ -63,7 +89,12 @@ def generate_knowledge(request: KnowledgeGenerationRequest) -> GeneratedKnowledg
             return obj
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
-            logger.warning("Generation attempt %s failed: %s", attempt, e)
+            logger.warning("Generation attempt %s failed (bad output): %s", attempt, e)
+        except Exception as e:
+            # Covers API/network/rate-limit/client errors too, so a single
+            # transient failure doesn't crash the whole pipeline immediately.
+            last_error = e
+            logger.warning("Generation attempt %s failed (API error): %s", attempt, e)
 
     raise RuntimeError(f"Failed to generate valid knowledge after retries: {last_error}")
 
@@ -90,6 +121,9 @@ def regenerate_knowledge(
             return GeneratedKnowledge(**raw)
         except (json.JSONDecodeError, ValidationError) as e:
             last_error = e
-            logger.warning("Regeneration attempt %s failed: %s", attempt, e)
+            logger.warning("Regeneration attempt %s failed (bad output): %s", attempt, e)
+        except Exception as e:
+            last_error = e
+            logger.warning("Regeneration attempt %s failed (API error): %s", attempt, e)
 
     raise RuntimeError(f"Failed to regenerate valid knowledge after retries: {last_error}")
