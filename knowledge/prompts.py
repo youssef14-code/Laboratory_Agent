@@ -9,20 +9,17 @@ JSON schema:
 
 {
   "description": "...",
-  "alias_names": {
-    "alias": "...",
-    "measurement": "...",
-    "equivalent_name": "...",
-    "aliases": []
-  },
+  "alias_names": [],
   "sample_type": "...",
-  "keywords": []
+  "keywords": [],
+  "duration": "...",
+  "patient_instructions": "..."
 }
 
 Field requirements:
 
 "description"
-- Write 2–4 sentences in Arabic.
+- Write 2–4 sentences in English.
 - Clearly explain:
 - What this test measures.
 - Why doctors order it.
@@ -31,24 +28,9 @@ Field requirements:
 - Do NOT write generic medical phrases that could describe any laboratory test.
 - Do NOT mention prices.
 
-"alias_names.alias"
-- The single most common alias/abbreviation for this test (official abbreviation
-  or the name most people search with).
-
-"alias_names.measurement"
-- A short phrase describing what this test measures/detects in the body.
-- Not a department name, not a generic phrase.
-
-"alias_names.equivalent_name"
-- The name of a DIFFERENT, distinctly-named test that measures or screens for
-  the same medical thing (if one genuinely exists) — e.g. two different test
-  names used by different labs/methods for the same clinical purpose.
-- This is NOT just another abbreviation/spelling of the same test name.
-- If no real equivalent test exists, return an empty string "" — never invent one.
-
-"alias_names.aliases"
-- Include only real and commonly used alternative names.
-- These may include:
+"alias_names"
+- A single flat list of all real and commonly used alternative names for this test.
+- May include:
   - Official abbreviation.
   - English name.
   - Arabic name.
@@ -60,6 +42,7 @@ Field requirements:
 - A single, short, clear value for the sample required, e.g. Blood, Serum, Urine, Stool, Plasma.
 
 "keywords"
+- Write all keywords in English.
 - Include meaningful search keywords related to this test.
 - Keywords may include:
   - Substance measured.
@@ -68,11 +51,34 @@ Field requirements:
   - Sample type.
   - Medical terminology.
 - Do NOT include generic words such as:
-  - تحليل
-  - فحص
-  - معمل
-  - تحاليل طبية
+  - test
+  - analysis
+  - lab
+  - laboratory
+  - medical test
 - Do not invent keywords simply to increase their number.
+
+"duration"
+- A short, realistic estimate in Arabic of how long it typically takes to get the
+  result for THIS specific test (e.g. "من 24 إلى 48 ساعة", "نفس اليوم", "من 3 إلى 5 أيام").
+- Base it on medical knowledge of how this specific test is typically processed.
+- Do not use a single generic value for every test — vary it based on the actual
+  complexity of the test (e.g. simple blood counts are usually faster than
+  specialized hormonal or genetic tests).
+- If a known duration was provided to you as existing data, you may reuse it if it
+  is reasonable, or refine it if it seems inaccurate for this specific test.
+
+"patient_instructions"
+- Write the patient preparation instructions required before taking this specific
+  sample, in Arabic (e.g. fasting requirements, timing, anything to avoid).
+- Be specific to this test — do not write generic instructions that could apply to
+  any lab test.
+- If this test genuinely requires no special preparation, return exactly:
+  "لا يوجد تحضير خاص لهذا التحليل."
+- If known instructions were provided to you as existing data, you may reuse them if
+  they are accurate, or refine/complete them if they are incomplete.
+- Never fabricate a requirement (e.g. fasting hours) that is not medically justified
+  for this specific test.
 
 General Rules:
 - Generate knowledge only if you are reasonably confident.

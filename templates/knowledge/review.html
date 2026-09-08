@@ -5,25 +5,23 @@
 
 {% block head %}
 <style>
-  .kp-wrap { --ink:#1e1b4b; --violet:#4f46e5; --violet-light:#eef2ff; --mist:#f8fafc;
+  .kp-wrap { --ink:#211412; --violet:#d91f26; --violet-light:#fff1f2; --mist:#fffaf5;
              --emerald:#10b981; --emerald-light:#ecfdf5; --amber:#f59e0b; --amber-light:#fffbeb;
              --line:#e2e8f0; --ink-soft:#64748b;
              display:grid; grid-template-columns: 1fr 300px; gap:20px; align-items:start; }
   @media (max-width: 900px) { .kp-wrap { grid-template-columns: 1fr; } .kp-side { order:-1; } }
 
-  /* ---- Header ---- */
-  .kp-hero { background:linear-gradient(135deg, var(--ink) 0%, #312e81 100%); color:#fff;
+  .kp-hero { background:linear-gradient(135deg, var(--ink) 0%, #9f171d 72%, #ed542d 100%); color:#fff;
              padding:28px 28px 24px; border-radius:16px 16px 0 0; position:relative; overflow:hidden; }
   .kp-hero::after { content:''; position:absolute; inset:0; background:
              radial-gradient(circle at 85% -10%, rgba(255,255,255,.12), transparent 55%); pointer-events:none; }
   .kp-eyebrow { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.15);
              padding:4px 12px; border-radius:999px; font-size:.78rem; font-weight:700; margin-bottom:10px; }
-  .kp-eyebrow svg { width:13px; height:13px; color:#a5b4fc; }
+  .kp-eyebrow svg { width:13px; height:13px; color:#ffd166; }
   .kp-title { font-size:1.5rem; font-weight:800; margin-bottom:2px; }
   .kp-price { position:absolute; top:26px; left:28px; font-size:1.15rem; font-weight:800; color:#6ee7b7;
              background:rgba(16,185,129,.15); padding:7px 16px; border-radius:10px; border:1px solid rgba(110,231,183,.3); }
 
-  /* ---- Pipeline stepper (signature element) ---- */
   .kp-stepper { background:#fff; border:1px solid var(--line); border-top:none; border-radius:0 0 16px 16px;
              padding:18px 28px; display:flex; align-items:center; gap:0; }
   .kp-step { display:flex; align-items:center; gap:10px; flex:1; }
@@ -38,7 +36,6 @@
   .kp-step.active .kp-step-label { color:#b45309; }
   .kp-step-line { flex:1; height:2px; background:var(--line); margin:0 6px; }
 
-  /* ---- Form card ---- */
   .kp-card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:28px; margin-top:20px; }
   .kp-field { margin-bottom:24px; }
   .kp-field:last-child { margin-bottom:0; }
@@ -49,10 +46,27 @@
   .kp-textarea { width:100%; line-height:1.8; font-size:.98rem; padding:14px 16px; border-radius:10px;
              border:1.5px solid var(--line); resize:vertical; font-family:inherit; transition:.15s; background:var(--mist); }
   .kp-textarea:focus { outline:none; border-color:var(--violet); background:#fff; box-shadow:0 0 0 3px var(--violet-light); }
-  .kp-textarea.ai-filled { border-color:#c7d2fe; background:var(--violet-light); }
+  .kp-textarea.ai-filled { border-color:#fecaca; background:var(--violet-light); }
   .kp-hint { font-size:.78rem; color:var(--ink-soft); margin-top:6px; }
 
-  /* ---- Sidebar ---- */
+  /* Tag / Chip Manager */
+  .kp-tag-container { background:var(--mist); border:1.5px solid var(--line); border-radius:10px; padding:12px; transition:.15s; }
+  .kp-tag-container:focus-within { border-color:var(--violet); background:#fff; box-shadow:0 0 0 3px var(--violet-light); }
+  .kp-tag-container.ai-filled { border-color:#fecaca; background:var(--violet-light); }
+  .kp-tag-list { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; min-height:32px; align-items:center; }
+  .kp-chip { display:inline-flex; align-items:center; gap:6px; background:#fff1f2; color:#9f1239; padding:5px 12px;
+             border-radius:20px; font-size:.85rem; font-weight:700; border:1px solid #fecaca; animation:kp-pop .2s ease; }
+  .kp-chip-keyword { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+  .kp-chip-remove { cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+                    width:16px; height:16px; border-radius:50%; background:rgba(0,0,0,.1); transition:.15s; font-weight:800; font-size:.75rem; }
+  .kp-chip-remove:hover { background:rgba(239,68,68,.8); color:#fff; }
+  .kp-tag-input-row { display:flex; gap:8px; }
+  .kp-tag-input { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:.9rem; outline:none; background:#fff; }
+  .kp-tag-input:focus { border-color:var(--violet); }
+  .kp-tag-add-btn { background:var(--violet); color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:.85rem; font-weight:700; cursor:pointer; }
+  .kp-tag-add-btn:hover { background:#b71319; }
+  @keyframes kp-pop { 0% { transform:scale(.8); opacity:0; } 100% { transform:scale(1); opacity:1; } }
+
   .kp-side { position:sticky; top:20px; display:flex; flex-direction:column; gap:16px; }
   .kp-side-card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; }
   .kp-side-title { font-size:.78rem; font-weight:800; color:var(--ink-soft); text-transform:uppercase;
@@ -63,7 +77,6 @@
   .kp-fact-label { color:var(--ink-soft); }
   .kp-fact-value { font-weight:700; color:var(--ink); }
 
-  /* ---- Buttons ---- */
   .kp-actions { margin-top:24px; display:flex; gap:10px; flex-wrap:wrap; }
   .kp-btn { display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:.9rem;
              padding:12px 22px; border-radius:10px; border:none; cursor:pointer; transition:.15s; }
@@ -89,10 +102,10 @@
     <div class="kp-hero">
       <div class="kp-eyebrow">
         <i data-lucide="sparkles"></i>
-        تحليل طبي
+        {% if entity_type == 'lab' %}تحليل طبي{% else %}باقة تحاليل شاملة{% endif %}
       </div>
       <div class="kp-title">{{ entity.name }}</div>
-      <p style="font-size:.85rem;color:#c7d2fe;">مراجعة المعرفة الطبية المولّدة بالذكاء الاصطناعي قبل اعتمادها</p>
+      <p style="font-size:.85rem;color:#fff1dc;">مراجعة المعرفة الطبية المولّدة بالذكاء الاصطناعي قبل اعتمادها</p>
       <div class="kp-price">{{ "%.2f"|format(entity.price or 0.0) }} ج.م</div>
     </div>
 
@@ -119,27 +132,40 @@
           <span class="kp-label-text"><i data-lucide="file-text"></i> الوصف الطبي الشامل</span>
           <span class="kp-count" id="count-description">0 حرف</span>
         </label>
-        <textarea id="field-description" name="description" class="kp-textarea" rows="7"
+        <textarea id="field-description" name="description" class="kp-textarea" rows="6"
           placeholder="انقر على «توليد بالذكاء الاصطناعي» لإنشاء الوصف تلقائياً...">{{ entity.description or '' }}</textarea>
       </div>
 
+      <!-- Aliases: JSON array chips -->
       <div class="kp-field">
         <label class="kp-label">
           <span class="kp-label-text"><i data-lucide="tags"></i> الأسماء البديلة والمرادفات</span>
-          <span class="kp-count" id="count-alias-names">0 حرف</span>
+          <span class="kp-count" id="count-aliases">0 أسماء</span>
         </label>
-        <textarea id="field-alias-names" name="alias_names" class="kp-textarea" rows="3"
-          placeholder="مثال: فحص الدم الشامل, CBC, تحليل صورة الدم الوريدي...">{{ entity.alias_names or '' }}</textarea>
-        <p class="kp-hint">افصل بين كل اسم بديل بفاصلة — كل اسم يساعد المرضى على إيجاد هذا التحليل بسهولة</p>
+        <div class="kp-tag-container" id="aliases-box">
+          <div class="kp-tag-list" id="aliases-list"></div>
+          <div class="kp-tag-input-row">
+            <input type="text" id="aliases-input" class="kp-tag-input" placeholder="اكتب اسم بديل واضغط Enter أو إضافة...">
+            <button type="button" class="kp-tag-add-btn" id="aliases-add-btn">إضافة</button>
+          </div>
+        </div>
+        <p class="kp-hint">يتم حفظ كل اسم كعنصر مستقل في مصفوفة JSON لضمان دقة البحث التقريبي (Fuzzy Search)</p>
       </div>
 
+      <!-- Keywords: JSON array chips -->
       <div class="kp-field">
         <label class="kp-label">
           <span class="kp-label-text"><i data-lucide="key-round"></i> الكلمات المفتاحية للبحث</span>
-          <span class="kp-count" id="count-keywords">0 حرف</span>
+          <span class="kp-count" id="count-keywords">0 كلمات</span>
         </label>
-        <textarea id="field-keywords" name="keywords" class="kp-textarea" rows="3"
-          placeholder="كلمات مفتاحية للبحث التلقائي يفصل بينها فاصلة...">{{ entity.keywords or '' }}</textarea>
+        <div class="kp-tag-container" id="keywords-box">
+          <div class="kp-tag-list" id="keywords-list"></div>
+          <div class="kp-tag-input-row">
+            <input type="text" id="keywords-input" class="kp-tag-input" placeholder="اكتب كلمة مفتاحية واضغط Enter أو إضافة...">
+            <button type="button" class="kp-tag-add-btn" id="keywords-add-btn">إضافة</button>
+          </div>
+        </div>
+        <p class="kp-hint">تتحول الكلمات المفتاحية تلقائياً إلى أحرف صغيرة بدون تكرار لتغذية فهرس FAISS والبحث السريع</p>
       </div>
 
       <div class="kp-field">
@@ -156,32 +182,35 @@
 
       <div class="kp-actions">
         <button type="button" id="generateBtn" class="kp-btn kp-btn-generate"
-          data-url="{{ url_for('generate_lab_knowledge', lab_id=entity.id) }}">
+          data-url="{% if entity_type == 'lab' %}{{ url_for('generate_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('generate_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
           <i data-lucide="sparkles" id="genIcon"></i> توليد بالذكاء الاصطناعي
         </button>
         <button type="button" id="approveBtn" class="kp-btn kp-btn-approve"
-          data-url="{{ url_for('approve_lab_knowledge', lab_id=entity.id) }}">
+          data-url="{% if entity_type == 'lab' %}{{ url_for('approve_lab_knowledge', lab_id=entity.id) }}{% else %}{{ url_for('approve_bundle_knowledge', bundle_id=entity.id) }}{% endif %}">
           <i data-lucide="check-circle-2"></i> اعتماد وحفظ المعرفة
         </button>
-        <a href="{{ url_for('list_labs') }}" class="kp-btn kp-btn-ghost">عودة</a>
+        <a href="{% if entity_type == 'lab' %}{{ url_for('list_labs') }}{% else %}{{ url_for('list_bundles') }}{% endif %}"
+           class="kp-btn kp-btn-ghost">عودة</a>
       </div>
     </form>
   </div>
 
   <aside class="kp-side">
     <div class="kp-side-card">
-      <div class="kp-side-title">بيانات التحليل</div>
-      <div class="kp-fact"><span class="kp-fact-label">العينة</span><span class="kp-fact-value">{{ entity.sample_type or '—' }}</span></div>
+      <div class="kp-side-title">بيانات {{ 'التحليل' if entity_type == 'lab' else 'الباقة' }}</div>
+      {% if entity_type == 'lab' %}
+      <div class="kp-fact"><span class="kp-fact-label">العينة</span><span class="kp-fact-value">{{ entity.sample_type or entity.specimen or '—' }}</span></div>
       <div class="kp-fact"><span class="kp-fact-label">مدة الظهور</span><span class="kp-fact-value">{{ entity.durations or '—' }}</span></div>
+      {% endif %}
       <div class="kp-fact"><span class="kp-fact-label">السعر</span><span class="kp-fact-value">{{ "%.2f"|format(entity.price or 0.0) }} ج.م</span></div>
       <div class="kp-fact"><span class="kp-fact-label">تعليمات المريض</span><span class="kp-fact-value" style="font-weight:600;">{{ entity.patient_instructions or 'بدون تعليمات' }}</span></div>
     </div>
 
     <div class="kp-side-card">
-      <div class="kp-side-title">ملاحظة</div>
+      <div class="kp-side-title">حماية بنية البيانات</div>
       <p style="font-size:.85rem;color:var(--ink-soft);line-height:1.7;">
-        لا يتم حفظ أي بيانات في قاعدة البيانات أو الفهرس الدلالي إلا بعد الضغط على «اعتماد وحفظ المعرفة».
-        راجع كل حقل جيداً قبل الاعتماد، خاصة الوصف الطبي.
+        المحرر الذكي يمنع تلف بنية البيانات ويحول المدخلات تلقائياً إلى مصفوفات JSON قياسية محمية لمنع أي أخطاء في محرك البحث.
+        لا يتم حفظ أي بيانات إلا بعد الضغط على «اعتماد وحفظ المعرفة».
       </p>
     </div>
   </aside>
@@ -195,22 +224,146 @@ document.addEventListener('DOMContentLoaded', function() {
   const approveBtn = document.getElementById('approveBtn');
   const statusBox = document.getElementById('statusBox');
   const genIcon = document.getElementById('genIcon');
+  const descField = document.getElementById('field-description');
+  const countDesc = document.getElementById('count-description');
+  const searchTextField = document.getElementById('field-search-text');
+  const countSearchText = document.getElementById('count-search-text');
 
-  const fields = {
-    description: document.getElementById('field-description'),
-    'alias-names': document.getElementById('field-alias-names'),
-    keywords: document.getElementById('field-keywords'),
-    'search-text': document.getElementById('field-search-text'),
-  };
+  // ---- Robust JSON/array parsing helper ----
+  // Handles: real JS array, JSON string '["a","b"]', legacy comma string "a, b, c",
+  // or a Python-repr string like "['a', 'b']" that leaked in from a bad save.
+  function toArray(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (raw === null || raw === undefined) return [];
+    let str = String(raw).trim();
+    if (!str) return [];
 
-  function updateCount(key) {
-    const el = document.getElementById('count-' + key);
-    if (el) el.textContent = (fields[key].value || '').length + ' حرف';
+    // Try proper JSON first
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);
+    } catch (e) { /* not JSON, fall through */ }
+
+    // Looks like a Python list repr: ['a', 'b', 'c'] or ["a", "b"]
+    if (/^\[.*\]$/s.test(str)) {
+      str = str.slice(1, -1);
+      return str.split(',')
+        .map(s => s.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean);
+    }
+
+    // Fallback: plain comma-separated string
+    return str.split(',').map(s => s.trim()).filter(Boolean);
   }
-  Object.keys(fields).forEach(key => {
-    updateCount(key);
-    fields[key].addEventListener('input', () => updateCount(key));
-  });
+
+  let stateAliases = toArray({{ entity.alias_names|tojson if entity.alias_names is defined else entity.aliases|tojson }});
+  let stateKeywords = toArray({{ entity.keywords|tojson }});
+
+  function updateDescCount() {
+    countDesc.textContent = (descField.value || '').length + ' حرف';
+  }
+  descField.addEventListener('input', updateDescCount);
+  updateDescCount();
+
+  function updateSearchTextCount() {
+    countSearchText.textContent = (searchTextField.value || '').length + ' حرف';
+  }
+  searchTextField.addEventListener('input', updateSearchTextCount);
+  updateSearchTextCount();
+
+  class TagManager {
+    constructor(listId, inputId, addBtnId, countId, isKeyword = false) {
+      this.listEl = document.getElementById(listId);
+      this.inputEl = document.getElementById(inputId);
+      this.addBtnEl = document.getElementById(addBtnId);
+      this.countEl = document.getElementById(countId);
+      this.boxEl = this.listEl.closest('.kp-tag-container');
+      this.isKeyword = isKeyword;
+      this.tags = [];
+
+      this.addBtnEl.addEventListener('click', () => this.addFromInput());
+      this.inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          this.addFromInput();
+        }
+      });
+    }
+
+    setTags(arr) {
+      this.tags = [];
+      toArray(arr).forEach(item => this.addTag(item, false));
+      this.render();
+    }
+
+    addTag(text, render = true) {
+      if (!text) return;
+      let clean = String(text).trim().replace(/\s+/g, ' ');
+      if (this.isKeyword) clean = clean.toLowerCase();
+      if (!clean) return;
+
+      const exists = this.tags.some(t => t.toLowerCase() === clean.toLowerCase());
+      if (!exists) {
+        this.tags.push(clean);
+        if (render) this.render();
+      }
+    }
+
+    addFromInput() {
+      const val = this.inputEl.value;
+      if (val) {
+        const parts = val.split(/[,\n;]+/);
+        parts.forEach(p => this.addTag(p, false));
+        this.inputEl.value = '';
+        this.render();
+      }
+    }
+
+    removeTag(index) {
+      this.tags.splice(index, 1);
+      this.render();
+    }
+
+    markAiFilled() { if (this.boxEl) this.boxEl.classList.add('ai-filled'); }
+    clearAiFilled() { if (this.boxEl) this.boxEl.classList.remove('ai-filled'); }
+
+    render() {
+      this.listEl.innerHTML = '';
+      this.tags.forEach((tag, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'kp-chip' + (this.isKeyword ? ' kp-chip-keyword' : '');
+        chip.textContent = tag;
+
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'kp-chip-remove';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.title = 'حذف';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.removeTag(idx);
+          this.clearAiFilled();
+        });
+
+        chip.appendChild(removeBtn);
+        this.listEl.appendChild(chip);
+      });
+
+      this.countEl.textContent = this.tags.length + (this.isKeyword ? ' كلمات' : ' أسماء');
+    }
+
+    getTags() {
+      return [...this.tags];
+    }
+  }
+
+  const aliasManager = new TagManager('aliases-list', 'aliases-input', 'aliases-add-btn', 'count-aliases', false);
+  const keywordManager = new TagManager('keywords-list', 'keywords-input', 'keywords-add-btn', 'count-keywords', true);
+
+  aliasManager.setTags(stateAliases);
+  keywordManager.setTags(stateKeywords);
+
+  aliasManager.inputEl.addEventListener('input', () => aliasManager.clearAiFilled());
+  keywordManager.inputEl.addEventListener('input', () => keywordManager.clearAiFilled());
 
   function setStep(name) {
     document.querySelectorAll('.kp-step').forEach(el => {
@@ -240,13 +393,21 @@ document.addEventListener('DOMContentLoaded', function() {
         generateBtn.disabled = false;
         genIcon.classList.remove('kp-spin');
         if (res.success && res.data) {
-          fields.description.value = res.data.description || '';
-          fields['alias-names'].value = res.data.alias_names || '';
-          fields.keywords.value = res.data.keywords || '';
-          fields['search-text'].value = res.data.search_text || '';
-          Object.keys(fields).forEach(k => { fields[k].classList.add('ai-filled'); updateCount(k); });
+          descField.value = res.data.description || '';
+          descField.classList.add('ai-filled');
+          updateDescCount();
+
+          searchTextField.value = res.data.search_text || '';
+          searchTextField.classList.add('ai-filled');
+          updateSearchTextCount();
+
+          aliasManager.setTags(res.data.alias_names || res.data.aliases || []);
+          aliasManager.markAiFilled();
+          keywordManager.setTags(res.data.keywords || []);
+          keywordManager.markAiFilled();
+
           setStep('review');
-          showStatus('✨ تم توليد المعرفة — راجع البيانات قبل الاعتماد.', true);
+          showStatus('✨ تم توليد المعرفة بنجاح — يمكنك مراجعة كل حقل قبل الاعتماد.', true);
         } else {
           showStatus(res.message || 'حدث خطأ أثناء التوليد', false);
         }
@@ -258,15 +419,16 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   });
 
-  Object.values(fields).forEach(f => f.addEventListener('input', () => f.classList.remove('ai-filled')));
+  descField.addEventListener('input', () => descField.classList.remove('ai-filled'));
+  searchTextField.addEventListener('input', () => searchTextField.classList.remove('ai-filled'));
 
   approveBtn.addEventListener('click', function() {
     approveBtn.disabled = true;
     const payload = {
-      description: fields.description.value,
-      alias_names: fields['alias-names'].value,
-      keywords: fields.keywords.value,
-      search_text: fields['search-text'].value
+      description: descField.value,
+      alias_names: aliasManager.getTags(),   // real JSON array
+      keywords: keywordManager.getTags(),    // real JSON array
+      search_text: searchTextField.value
     };
 
     fetch(approveBtn.dataset.url, {

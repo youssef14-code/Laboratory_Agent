@@ -11,6 +11,12 @@ class InquiryResponse(BaseModel):
         )
     )
 
+    test_prices: list[float] = Field(
+        default_factory=list,
+        description="List of prices extracted from Retrieved Knowledge for the presented tests only, e.g. [150, 250, 250]"
+    )
+
+
     summary: str = Field(
         description=(
             "Persistent English conversation memory.\n\n"

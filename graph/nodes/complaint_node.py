@@ -29,6 +29,17 @@ RULES
 4. Set confirmed=true ONLY when the user explicitly confirms submitting the complaint (e.g., تمام، سجل، اه، أيوة، yes, submit).
 5. Set ready_to_save=true ONLY if phone and complaint_text are both available.
 6. Update the conversation summary while preserving all previously collected information, including customer information, booking information, complaint details, and relevant history. Never remove unrelated information from the summary.
+
+====================
+CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
+====================
+1. ⏳ CHRONOLOGICAL ORDER:
+   - The "RECENT CHAT HISTORY" is strictly ordered from OLDEST to NEWEST.
+   - The exchange at the bottom is the MOST RECENT past interaction.
+   - Always prioritize the latest user statements, corrections, or updates over older ones.
+2. 🔗 CONTEXT & PRONOUN RESOLUTION:
+   - If the user uses referring phrases (e.g., "نفس اللي قولتلك عليه", "زي ما اتفقنا", "غيرت رأيي", "التحليل اللي سألت عنه فوق"), trace backwards through the Chat History from bottom to top to resolve the exact context.
+   - Combine the immediate flow from Chat History with the long-term facts from the Cumulative Summary.
 """
 
 
@@ -42,10 +53,12 @@ def complaint_node(state: AgentState) -> dict:
 
     current_summary = state.get("summary") or ""
     last_bot_message = state.get("last_bot_message") or ""
+    chat_history = state.get("chat_history") or ""
 
     llm = get_gemini()
     structured_llm = llm.with_structured_output(
         ComplaintResponse,
+        method="json_schema",
         include_raw=True,
     )
 
@@ -61,6 +74,11 @@ Summary:
 
 Last Bot Message:
 {last_bot_message}
+
+====================
+RECENT CHAT HISTORY (Last Exchanges)
+====================
+{chat_history or "(No previous chat history)"}
 """
 
     messages = [
@@ -152,12 +170,13 @@ Last Bot Message:
 
     try:
 
-        ClientService.update_client_summary_and_last_bot_message(
-            sender_id=sender_id,
-            page_id=page_id,
+        ClientService.save_chat_exchange(
             platform_id=platform_id,
+            page_id=page_id,
+            sender_id=sender_id,
+            user_message=user_message,
+            bot_reply=clean_reply,
             summary=parsed.summary,
-            last_bot_message=clean_reply,
         )
 
     except Exception as e:

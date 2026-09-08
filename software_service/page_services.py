@@ -62,10 +62,25 @@ class PageService(BaseService):
     @staticmethod
     def delete_page(platform_id, page_id):
         page = Page.query.filter_by(platform_id=platform_id, page_id=page_id).first()
+        
         if not page:
             return None, "الصفحة غير موجودة"
 
-        return BaseService.delete(page, success_msg="تم حذف الصفحة بنجاح", error_prefix="حدث خطأ أثناء الحذف")
+        try:
+            from models.models import Client
+
+            # 1. حذف العملاء المرتبطين بهذه الصفحة أولاً لمنع تعارض الـ Foreign Key
+            Client.query.filter_by(platform_id=platform_id, page_id=page_id).delete()
+
+            # 2. حذف الصفحة
+            db.session.delete(page)
+            db.session.commit()
+            
+            return True, "تم حذف الصفحة وجميع بياناتها بنجاح"
+
+        except Exception as e:
+            db.session.rollback()
+            return False, f"حدث خطأ أثناء الحذف: {str(e)}"
 
     # ── Platforms (for the dropdown when adding a page) ────────────────────
 

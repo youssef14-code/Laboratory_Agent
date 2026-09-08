@@ -75,6 +75,7 @@ def delete_vector(lab_id: int) -> None:
             _index.remove_ids(np.array([lab_id], dtype="int64"))
             del _metadata[lab_id]
             _save()
+            
 
 
 def search(query_embedding: list[float], k: int = 5) -> list[dict]:

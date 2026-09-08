@@ -22,28 +22,22 @@ class KnowledgeGenerationRequest(BaseModel):
     entity_id: Optional[int] = None
 
 
-class AliasNames(BaseModel):
-    alias: str = ""
-    measurement: str = ""
-    equivalent_name: str = ""
-    aliases: List[str] = Field(default_factory=list)
-
-
 class GeneratedKnowledge(BaseModel):
     description: str
-    alias_names: AliasNames
+    alias_names: List[str] = Field(default_factory=list)
     sample_type: str = ""
     keywords: List[str] = Field(default_factory=list)
+    duration: str = ""
+    patient_instructions: str = ""
     search_text: Optional[str] = ""
 
     def construct_search_text(self, item_name: str) -> str:
-        aliases_str = ", ".join(self.alias_names.aliases)
+        aliases_str = ", ".join(self.alias_names)
         keywords_str = ", ".join(self.keywords)
 
         self.search_text = (
             f"{item_name}\n"
             f"{self.description}\n"
-            f"الاسم البديل الأساسي: {self.alias_names.alias}\n"
             f"المرادفات والأسماء البديلة: {aliases_str}\n"
             f"الكلمات المفتاحية: {keywords_str}"
         )

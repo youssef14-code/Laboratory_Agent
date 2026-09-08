@@ -51,8 +51,8 @@ class LabService(db.Model):
     price = db.Column(db.Float, nullable=False)
     patient_instructions= db.Column(db.Text)
     durations = db.Column(db.String(100))
-    keywords = db.Column(db.Text)
-    alias_names= db.Column(db.Text)
+    keywords = db.Column(db.JSON)
+    alias_names= db.Column(db.JSON)
     sample_type = db.Column(db.String(100))
     search_text = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
@@ -102,20 +102,55 @@ class Page(db.Model):
     clients = db.relationship('Client', backref='page', lazy=True)
 
 class Client(db.Model):
-    __tablename__ = 'clients'
+    __tablename__ = "clients"
     __table_args__ = (
-        PrimaryKeyConstraint('platform_id', 'page_id', 'sender_id'),
+        PrimaryKeyConstraint("platform_id", "page_id", "sender_id"),
         ForeignKeyConstraint(
-            ['platform_id', 'page_id'],
-            ['pages.platform_id', 'pages.page_id']
+            ["platform_id", "page_id"],
+            ["pages.platform_id", "pages.page_id"],
         ),
     )
+
     platform_id = db.Column(db.Integer, nullable=False)
     page_id = db.Column(db.String(100), nullable=False)
     sender_id = db.Column(db.String(100), nullable=False)
     summary = db.Column(db.Text)
     last_bot_message = db.Column(db.Text)
     expiration_date = db.Column(db.DateTime)
+
+    chat_history = db.relationship(
+        "ChatHistory",
+        backref="client",
+        lazy=True,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ChatHistory.id",
+    )
+
+
+class ChatHistory(db.Model):
+    __tablename__ = "chat_history"
+    MAX_HISTORY = 10  # الحد الأقصى للرسائل المحتفظ بها لكل عميل
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    platform_id = db.Column(db.Integer, nullable=False)
+    page_id = db.Column(db.String(255), nullable=False)
+    sender_id = db.Column(db.String(255), nullable=False)
+    user_message = db.Column(db.Text, nullable=False)
+    bot_reply = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.ForeignKeyConstraint(
+            ["platform_id", "page_id", "sender_id"],
+            ["clients.platform_id", "clients.page_id", "clients.sender_id"],
+            ondelete="CASCADE",
+        ),
+        db.Index("idx_chat_history_client", "platform_id", "page_id", "sender_id"),
+    )
+    def __repr__(self):
+        return f"<ChatHistory id={self.id} sender={self.sender_id}>"
+    # One row contains one user message and its bot reply.
+    # Therefore 8 rows represent 8 exchanges (up to 16 messages).
+    MAX_HISTORY = 8
 
 class Complaint(db.Model):
     __tablename__ = 'complaints'

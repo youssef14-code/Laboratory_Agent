@@ -8,6 +8,11 @@ add_new_labtests.py
 وبيستخدم النسخة المبسطة الجديدة (embedding_simple / vector_store_simple)
 بدل knowledge.embedding / knowledge.vector_store القديمين.
 
+المدة (duration) والتحضير (patient_instructions):
+- لو موجودين في الإكسل، بناخدهم كما هما (أولوية الإكسل).
+- لو مش موجودين، جيميناي بيولّدهم بناءً على نوع التحليل نفسه.
+- لو الاتنين مش متاحين (إكسل ولا جيميناي)، بنستخدم قيمة افتراضية أخيرة.
+
 طريقة التشغيل:
     python add_new_labtests.py "new_tests.xlsx"
     python add_new_labtests.py "new_tests.xlsx" --sheet 0
@@ -38,6 +43,10 @@ from knowledge.embedding import generate_embedding, build_search_text
 from knowledge.vector_store import upsert_vector
 
 DEFAULT_EXCEL_NAME = "Price_List_2026 - Copy.xlsx"
+
+# فولباك أخير بس لو الإكسل فاضي وجيميناي كمان فشل يولد قيمة
+FALLBACK_DURATION = "24-48 ساعة"
+FALLBACK_INSTRUCTIONS = "لا يوجد تحضير خاص لهذا التحليل."
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -70,12 +79,6 @@ def get_field(obj, *names, default=None):
     return default
 
 
-def as_csv(val):
-    if isinstance(val, list):
-        return ", ".join(str(v) for v in val)
-    return str(val) if val is not None else ""
-
-
 def generate_knowledge_with_backoff(req, max_attempts=5):
     for attempt in range(1, max_attempts + 1):
         try:
@@ -103,6 +106,8 @@ def main():
     parser = argparse.ArgumentParser(description="Add new lab tests from an Excel file WITHOUT resetting the DB.")
     parser.add_argument("excel_path", nargs="?", default=None, help="Path to the new tests .xlsx file")
     parser.add_argument("--sheet", default=0, help="Sheet name or index to read (default: first sheet)")
+    parser.add_argument("--limit", type=int, default=None, help="Process only the first N unique rows (for testing)")
+    parser.add_argument("--dry-run", action="store_true", help="Generate knowledge only — no DB insert, no vector upsert")
     args = parser.parse_args()
 
     excel_path = args.excel_path or os.path.join(project_dir, DEFAULT_EXCEL_NAME)
@@ -138,8 +143,13 @@ def main():
             seen.add(name)
             unique_rows.append(row)
 
+    if args.limit is not None:
+        unique_rows = unique_rows[:args.limit]
+
     total_tests = len(unique_rows)
     print(f"Loaded {total_tests} unique lab tests from Excel.", flush=True)
+    if args.dry_run:
+        print("*** DRY RUN MODE: nothing will be saved to the DB or the FAISS index ***", flush=True)
 
     success_count = 0
     error_count = 0
@@ -158,18 +168,21 @@ def main():
         price = clean_price(row.get("Price") or row.get("price"))
         prep_en = clean_value(row.get("Preparation (English)"))
         prep_ar = clean_value(row.get("التحضير المطلوب (عربي)"))
+        excel_duration = clean_value(row.get("Duration") or row.get("duration") or row.get("المدة"))
 
         instructions_parts = []
         if prep_ar:
             instructions_parts.append(prep_ar)
         if prep_en:
             instructions_parts.append(f"({prep_en})")
-        patient_instructions = "\n".join(instructions_parts) if instructions_parts else "لا يوجد تحضير خاص."
+        # من غير default هنا — لو الإكسل فاضي، هنسيب المجال لجيميناي يولّد بدل
+        # ما نقفل الاختيار بقيمة ثابتة من الأول.
+        excel_instructions = "\n".join(instructions_parts) if instructions_parts else ""
 
         req = KnowledgeGenerationRequest(
             name=test_name,
-            patient_instructions=patient_instructions,
-            duration="24-48 ساعة",
+            patient_instructions=excel_instructions or None,
+            duration=excel_duration or None,
             price=price,
             entity_type=EntityType.LAB,
         )
@@ -186,15 +199,21 @@ def main():
         aliases = get_field(gen, "aliases", "alias_names", default=[test_name])
         keywords = get_field(gen, "keywords", default=[test_name])
         gen_sample_type = get_field(gen, "sample_type", default="")
+        gen_duration = get_field(gen, "duration", default="")
+        gen_instructions = get_field(gen, "patient_instructions", default="")
 
-        # الأولوية لأي قيمة موجودة في الإكسل، لو مش موجودة ناخد اللي Gemini ولّدها
+        # الأولوية دايماً لأي قيمة موجودة في الإكسل، وإلا اللي جيميناي ولّده،
+        # وإلا فولباك أخير ثابت (بس بيتستخدم فعلياً بس لو الاتنين فشلوا).
         final_sample_type = sample_type or gen_sample_type or None
+        final_duration = excel_duration or gen_duration or FALLBACK_DURATION
+        final_instructions = excel_instructions or gen_instructions or FALLBACK_INSTRUCTIONS
 
-        # aliases ممكن ترجع كـ AliasNames object مش list — نحولها لحاجة موحّدة
-        if hasattr(aliases, "aliases"):
-            alias_list = list(aliases.aliases)
-        elif isinstance(aliases, list):
+        # alias_names دلوقتي flat list من الأساس (بعد تصحيح الـ schema)،
+        # بس بنسيب فحص بسيط احتياطي لأي شكل غير متوقع.
+        if isinstance(aliases, list):
             alias_list = aliases
+        elif hasattr(aliases, "aliases"):
+            alias_list = list(aliases.aliases)
         else:
             alias_list = [str(aliases)]
 
@@ -208,31 +227,42 @@ def main():
             aliases=alias_list,
         )
 
-        with app.app_context():
-            lab_entity = LabService(
-                laboratory_id=lab_org_id,
-                name=test_name,
-                price=price,
-                sample_type=final_sample_type,
-                durations="24-48 ساعة",
-                patient_instructions=patient_instructions,
-                description=description,
-                alias_names=as_csv(alias_list),
-                keywords=as_csv(keyword_list),
-                search_text=search_text,
-            )
-            db.session.add(lab_entity)
-            db.session.commit()
-            assigned_id = lab_entity.id
+        if args.dry_run:
+            # ولا حفظ في الداتابيز ولا embedding/FAISS — بس عرض اللي كان هيتحفظ
+            success_count += 1
+            print(f"[{idx}/{total_tests}] [DRY-RUN OK] '{test_name}'", flush=True)
+            print(f"   sample_type          : {final_sample_type}", flush=True)
+            print(f"   duration             : {final_duration}", flush=True)
+            print(f"   patient_instructions : {final_instructions}", flush=True)
+            print(f"   alias_names          : {alias_list}", flush=True)
+            print(f"   keywords             : {keyword_list}", flush=True)
+            print(f"   description          : {str(description)[:120]}...", flush=True)
+        else:
+            with app.app_context():
+                lab_entity = LabService(
+                    laboratory_id=lab_org_id,
+                    name=test_name,
+                    price=price,
+                    sample_type=final_sample_type,
+                    durations=final_duration,
+                    patient_instructions=final_instructions,
+                    description=description,
+                    alias_names=alias_list,   # عمود JSON — بيتخزن كـ list مباشرة
+                    keywords=keyword_list,    # عمود JSON — بيتخزن كـ list مباشرة
+                    search_text=search_text,
+                )
+                db.session.add(lab_entity)
+                db.session.commit()
+                assigned_id = lab_entity.id
 
-            try:
-                embedding = generate_embedding(search_text)
-                upsert_vector(lab_id=assigned_id, name=test_name, embedding=embedding)
-            except Exception as vec_err:
-                print(f"   ⚠️ Vector upsert failed for '{test_name}': {vec_err}", flush=True)
+                try:
+                    embedding = generate_embedding(search_text)
+                    upsert_vector(lab_id=assigned_id, name=test_name, embedding=embedding)
+                except Exception as vec_err:
+                    print(f"   ⚠️ Vector upsert failed for '{test_name}': {vec_err}", flush=True)
 
-        success_count += 1
-        print(f"[{idx}/{total_tests}] [SUCCESS ID={assigned_id}] '{test_name}' -> {str(description)[:65]}...", flush=True)
+            success_count += 1
+            print(f"[{idx}/{total_tests}] [SUCCESS ID={assigned_id}] '{test_name}' -> {str(description)[:65]}...", flush=True)
 
         time.sleep(0.8)  # basic rate-limit pacing
 

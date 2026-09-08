@@ -1,112 +1,135 @@
 {% extends 'base.html' %}
-{% block title %}المعامل{% endblock %}
-{% block topbar_title %}المعامل{% endblock %}
-{% block topbar_sub %}إدارة معامل التحاليل الخارجيّة والفرعية{% endblock %}
+{% block title %}إدارة المعمل والفروع{% endblock %}
+{% block topbar_title %}إدارة المعمل والفروع{% endblock %}
+{% block topbar_sub %}البيانات الأساسية للمعمل وقائمة الفروع المعتمدة{% endblock %}
 
 {% block topbar_actions %}
-  <a href="{{ url_for('create_laboratory') }}" class="btn btn-primary">
+  <a href="{{ url_for('create_branch', lab_id=laboratory.id) }}" class="btn btn-primary">
     <i data-lucide="plus" style="width:16px;height:16px;"></i>
-    معمل جديد
+    إضافة فرع جديد
   </a>
 {% endblock %}
 
 {% block content %}
 
-<div class="card">
-  <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <i data-lucide="building-2" style="color:var(--primary);"></i>
-      <span class="card-title">قائمة المعامل</span>
-      <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);background:#f1f5f9;padding:3px 10px;border-radius:var(--radius-full);">
-        {{ laboratories|length }} معمل
-      </span>
+<!-- 🏢 بطاقة معلومات المعمل الرئيسية -->
+<div class="card" style="margin-bottom: 24px; border-right: 4px solid var(--primary);">
+  <div style="padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+    
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(225, 29, 72, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <i data-lucide="flask-conical" style="width: 26px; height: 26px; color: var(--primary);"></i>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+          <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin: 0;">{{ laboratory.name }}</h2>
+          <span style="font-size: 0.75rem; font-weight: 600; color: #16a34a; background: #dcfce7; padding: 2px 8px; border-radius: 20px;">
+            ● المعمل الرئيسي
+          </span>
+        </div>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0;">
+          {{ laboratory.info or 'المعمل الرئيسي لإجراء كافة التحاليل الطبية والفحوصات المعملية' }}
+        </p>
+      </div>
     </div>
 
-    <form method="GET" style="display:flex;gap:8px;position:relative;">
-      <div style="position:relative;">
-        <input type="text" name="search" class="form-control" placeholder="بحث بالاسم..."
-               value="{{ search or '' }}"
-               style="padding-right:36px;min-width:260px;">
-        <i data-lucide="search" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--text-muted);"></i>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="background: #f8fafc; border: 1px solid var(--surface-border); padding: 8px 16px; border-radius: 8px; text-align: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">إجمالي الفروع</span>
+        <strong style="font-size: 1.1rem; color: var(--primary);">{{ branches|length }} فروع</strong>
       </div>
-      <button type="submit" class="btn btn-primary">بحث</button>
-      {% if search %}
-        <a href="{{ url_for('list_laboratories') }}" class="btn btn-ghost" title="مسح البحث">
-          <i data-lucide="x" style="width:16px;height:16px;"></i>
-        </a>
-      {% endif %}
-    </form>
+      <a href="{{ url_for('edit_laboratory', lab_id=laboratory.id) }}" class="btn btn-ghost" style="border: 1px solid var(--surface-border);">
+        <i data-lucide="pencil" style="width: 15px; height: 15px;"></i>
+        تعديل بيانات المعمل
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<!-- 📍 جدول فروع المعمل -->
+<div class="card">
+  <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <i data-lucide="map-pin" style="color: var(--primary);"></i>
+      <span class="card-title">فروع المعمل وعناوينها</span>
+      <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-muted); background: #f1f5f9; padding: 2px 10px; border-radius: var(--radius-full);">
+        {{ branches|length }} فرع مسجل
+      </span>
+    </div>
   </div>
 
-  <div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;">
+  <div style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse;">
       <thead>
-        <tr style="border-bottom:1px solid var(--surface-border);">
-          <th style="text-align:right;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">اسم المعمل</th>
-          <th style="text-align:right;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">ملاحظات / معلومات</th>
-          <th style="text-align:left;padding:12px 16px;font-size:0.85rem;font-weight:700;color:var(--text-muted);">إجراءات</th>
+        <tr style="border-bottom: 1px solid var(--surface-border); background: #fafafa;">
+          <th style="text-align: right; padding: 14px 18px; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); width: 35%;">العنوان</th>
+          <th style="text-align: right; padding: 14px 18px; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); width: 30%;">أرقام التواصل والواتساب</th>
+          <th style="text-align: right; padding: 14px 18px; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); width: 20%;">مواعيد العمل</th>
+          <th style="text-align: left; padding: 14px 18px; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); width: 15%;">إجراءات</th>
         </tr>
       </thead>
       <tbody>
-        {% for lab in laboratories %}
-        <tr class="lab-row" style="border-bottom:1px solid var(--surface-border);transition:var(--transition);">
-          <td style="padding:14px 16px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:34px;height:34px;border-radius:var(--radius-sm);background:var(--primary-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <i data-lucide="flask-conical" style="width:16px;height:16px;color:var(--primary);"></i>
-              </div>
-              <span style="font-weight:600;color:var(--text-primary);">{{ lab.name }}</span>
+        {% for branch in branches %}
+        <tr class="branch-row" style="border-bottom: 1px solid var(--surface-border); transition: all 0.2s ease;">
+          
+          <td style="padding: 16px 18px;">
+            <div style="display: flex; align-items: flex-start; gap: 8px;">
+              <i data-lucide="map-pin" style="width: 16px; height: 16px; color: var(--primary); margin-top: 3px; flex-shrink: 0;"></i>
+              <span style="font-weight: 600; color: var(--text-primary); line-height: 1.5;">{{ branch.address }}</span>
             </div>
           </td>
-          <td style="padding:14px 16px;font-size:0.85rem;color:var(--text-secondary);max-width:280px;">
-            {{ lab.info or '—' }}
+
+          <td style="padding: 16px 18px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.88rem; color: var(--text-secondary);">
+              {% if branch.phone %}
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <i data-lucide="phone" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+                  <span>{{ branch.phone }}</span>
+                </div>
+              {% else %}
+                <span style="color: var(--text-muted);">—</span>
+              {% endif %}
+            </div>
           </td>
-          <td style="padding:14px 16px;">
-            <div style="display:flex;gap:8px;justify-content:flex-start;">
-              <a href="{{ url_for('list_branches', lab_id=lab.id) }}" class="btn btn-ghost btn-sm" title="الفروع">
-                <i data-lucide="map-pin" style="width:14px;height:14px;"></i>
-                الفروع
-              </a>
-              <a href="{{ url_for('edit_laboratory', lab_id=lab.id) }}" class="btn btn-ghost btn-sm" title="تعديل">
-                <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+
+          <td style="padding: 16px 18px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--text-secondary);">
+              <i data-lucide="clock" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+              <span>{{ branch.working_hours or '—' }}</span>
+            </div>
+          </td>
+
+          <td style="padding: 16px 18px;">
+            <div style="display: flex; gap: 8px; justify-content: flex-start;">
+              <a href="{{ url_for('edit_branch', branch_id=branch.id) }}" class="btn btn-ghost btn-sm" title="تعديل الفرع">
+                <i data-lucide="pencil" style="width: 14px; height: 14px;"></i>
                 تعديل
               </a>
-              <form action="{{ url_for('delete_laboratory', lab_id=lab.id) }}" method="POST"
-                    onsubmit="event.preventDefault(); confirmDelete(this);" style="display:inline;">
-                <button type="submit" class="btn btn-danger btn-sm" title="حذف">
-                  <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+              <form action="{{ url_for('delete_branch', branch_id=branch.id) }}" method="POST"
+                    onsubmit="event.preventDefault(); confirmDelete(this);" style="display: inline;">
+                <button type="submit" class="btn btn-danger btn-sm" title="حذف الفرع">
+                  <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
                   حذف
                 </button>
               </form>
             </div>
           </td>
+
         </tr>
         {% else %}
         <tr>
-          <td colspan="3" style="padding:0;">
-            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:56px 20px;">
-              <div style="width:56px;height:56px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;">
-                <i data-lucide="building-2" style="width:26px;height:26px;color:var(--text-muted);"></i>
+          <td colspan="4" style="padding: 48px 20px; text-align: center;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+              <div style="width: 50px; height: 50px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center;">
+                <i data-lucide="map-pin-off" style="width: 24px; height: 24px; color: var(--text-muted);"></i>
               </div>
-              <div style="text-align:center;">
-                <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">
-                  {% if search %}لا توجد نتائج مطابقة لبحثك{% else %}لا توجد معامل مسجلة بعد{% endif %}
-                </div>
-                <div style="font-size:0.85rem;color:var(--text-muted);">
-                  {% if search %}
-                    جرّب كلمة بحث مختلفة أو
-                    <a href="{{ url_for('list_laboratories') }}" style="color:var(--primary);">عرض كل المعامل</a>
-                  {% else %}
-                    ابدأ بإضافة أول معمل خارجي إلى النظام
-                  {% endif %}
-                </div>
-              </div>
-              {% if not search %}
-              <a href="{{ url_for('create_laboratory') }}" class="btn btn-primary" style="margin-top:4px;">
-                <i data-lucide="plus" style="width:16px;height:16px;"></i>
-                إضافة معمل
+              <strong style="color: var(--text-primary);">لا توجد فروع مسجلة لهذا المعمل بعد</strong>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">أضف فروعك وعناوينها لتظهر للمرضى تلقائياً عند السؤال</p>
+              <a href="{{ url_for('create_branch', lab_id=laboratory.id) }}" class="btn btn-primary" style="margin-top: 8px;">
+                <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                إضافة أول فرع
               </a>
-              {% endif %}
             </div>
           </td>
         </tr>
@@ -114,35 +137,17 @@
       </tbody>
     </table>
   </div>
-
-  {% if pagination and pagination.pages > 1 %}
-  <div class="pagination" style="display:flex;align-items:center;justify-content:center;gap:14px;padding:16px;border-top:1px solid var(--surface-border);">
-    {% if pagination.has_prev %}
-      <a href="{{ url_for('list_laboratories', page=pagination.prev_num, search=search) }}" class="btn btn-ghost btn-sm">
-        <i data-lucide="chevron-right" style="width:14px;height:14px;"></i>
-        السابق
-      </a>
-    {% endif %}
-    <span style="font-size:0.85rem;color:var(--text-muted);font-weight:600;">{{ pagination.page }} / {{ pagination.pages }}</span>
-    {% if pagination.has_next %}
-      <a href="{{ url_for('list_laboratories', page=pagination.next_num, search=search) }}" class="btn btn-ghost btn-sm">
-        التالي
-        <i data-lucide="chevron-left" style="width:14px;height:14px;"></i>
-      </a>
-    {% endif %}
-  </div>
-  {% endif %}
 </div>
 
 <style>
-.lab-row:hover {
+.branch-row:hover {
   background: #f8fafc;
 }
 </style>
 
 <script>
 function confirmDelete(form) {
-  if (confirm('هل أنت متأكد من حذف هذا المعمل؟ لا يمكن التراجع عن هذا الإجراء.')) {
+  if (confirm('هل أنت متأكد من حذف هذا الفرع؟ لا يمكن التراجع عن هذا الإجراء.')) {
     form.submit();
   }
 }

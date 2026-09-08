@@ -23,6 +23,7 @@ class AgentState(TypedDict):
     # memory
     summary: Optional[str]
     last_bot_message: Optional[str]
+    chat_history: Optional[str]
     
 
     # flags
@@ -48,8 +49,12 @@ class AgentState(TypedDict):
 
     visit_reference: Optional[str]
     booking_pdf: Optional[bytes]
+    booking_image: Optional[bytes]  # 👈 أضف هذا السطر
 
 
     rag_context: Optional[str]
     search_results: Optional[list[Any]]
     top_score: Optional[float]
+    
+    # timings
+    node_timings: Optional[dict[str, float]]

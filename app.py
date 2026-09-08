@@ -1,5 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from venv import logger
+import logging
+
+from openai import images
+logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 from griffe import logger
@@ -7,6 +11,7 @@ load_dotenv()
 
 
 import os
+import json
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -39,6 +44,18 @@ from knowledge.vector_store import ensure_vector_table
 
 ensure_vector_table()
 
+handlers = [logging.StreamHandler()]
+try:
+    handlers.append(logging.FileHandler("app.log", encoding="utf-8"))
+except Exception:
+    pass
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=handlers,
+)
 
 # Load environment variables
 load_dotenv()
@@ -280,23 +297,21 @@ def edit_user(user_id):
 @app.route('/laboratories')
 @login_required
 def list_laboratories():
-    page = request.args.get('page', 1, type=int)
-    search = request.args.get('search', '').strip() or None
-
-    pagination, msg = LaboratoryService.get_all_laboratories(page=page, per_page=10, search=search)
-
-    if pagination is None:
-        flash(msg, 'error')
-        pagination = type('Pagination', (), {
-            'items': [], 'total': 0, 'pages': 0, 'page': 1,
-            'has_prev': False, 'has_next': False, 'prev_num': 1, 'next_num': 1
-        })()
-
+    from models.models import Laboratory, Branch
+    
+    # جلب المعمل الرئيسي
+    lab = Laboratory.query.first()
+    if not lab:
+        # إذا لم يكن هناك معمل مسجل بعد، نوجهه لإنشاء المعمل
+        return redirect(url_for('create_laboratory'))
+    
+    # جلب كل فروع هذا المعمل
+    branches = Branch.query.filter_by(laboratory_id=lab.id).all()
+    
     return render_template(
         'laboratory/list.html',
-        laboratories=pagination.items,
-        pagination=pagination,
-        search=search
+        laboratory=lab,
+        branches=branches
     )
 
 
@@ -550,6 +565,7 @@ def review_lab_knowledge(lab_id):
     return render_template('knowledge/review.html', entity=lab, entity_type='lab')
 
 
+
 @app.route('/labs/<int:lab_id>/generate-knowledge', methods=['POST'])
 @login_required
 def generate_lab_knowledge(lab_id):
@@ -571,13 +587,24 @@ def generate_lab_knowledge(lab_id):
         )
         res = run_pre_approval_stage(req)
 
-        # res.alias_names هي AliasNames object، والقايمة الفعلية جوه .aliases
-        aliases_list = res.alias_names.aliases if res.alias_names else []
+        # aliases: خليها list حقيقية دايماً، مش string مجمّعة
+        aliases_list = list(res.alias_names) if res.alias_names else []
+
+        # keywords: نفس المبدأ - list حقيقية
+        if isinstance(res.keywords, list):
+            keywords_list = [str(k).strip() for k in res.keywords if str(k).strip()]
+        else:
+            # fallback لو رجعت string بأي شكل (زي "['a','b']" أو "a, b, c")
+            raw = str(res.keywords or "")
+            raw = raw.strip()
+            if raw.startswith('[') and raw.endswith(']'):
+                raw = raw[1:-1]
+            keywords_list = [k.strip().strip("'\"") for k in raw.split(',') if k.strip().strip("'\"")]
 
         data = {
             "description": res.description,
-            "alias_names": ", ".join(aliases_list),
-            "keywords": ", ".join(res.keywords) if isinstance(res.keywords, list) else str(res.keywords),
+            "alias_names": aliases_list,   # array
+            "keywords": keywords_list,     # array
             "search_text": res.search_text
         }
     except Exception as e:
@@ -587,8 +614,8 @@ def generate_lab_knowledge(lab_id):
         name = lab.name
         data = {
             "description": f"تحليل {name} الطبي للمساعدة في التشخيص الطبي وتقييم الوظائف الحيوية للمريض.",
-            "alias_names": f"{name}, فحص {name}, تحليل {name}",
-            "keywords": f"{name}, تحاليل طبية, عينة {lab.sample_type or 'دم'}, فحوصات",
+            "alias_names": [name, f"فحص {name}", f"تحليل {name}"],
+            "keywords": [name, "تحاليل طبية", f"عينة {lab.sample_type or 'دم'}", "فحوصات"],
             "search_text": f"فحص وتحليل {name} - السعر: {lab.price} ج.م - العينة: {lab.sample_type or 'غير محدد'} - التعليمات: {lab.patient_instructions or 'بدون صيام'}"
         }
 
@@ -603,44 +630,71 @@ def approve_lab_knowledge(lab_id):
         return jsonify({"success": False, "message": "التحليل غير موجود"})
 
     data = request.json or request.form
+
     description = data.get('description', lab.description)
-    alias_names = data.get('alias_names', lab.alias_names)
-    keywords = data.get('keywords', lab.keywords)
+    alias_names_raw = data.get('alias_names', lab.alias_names)
+    keywords_raw = data.get('keywords', lab.keywords)
     search_text = data.get('search_text', lab.search_text)
 
+    # طبّع القيم لـ list حقيقية بغض النظر عن الشكل الوارد
+    def normalize_to_list(val):
+        if isinstance(val, list):
+            return [str(v).strip() for v in val if str(v).strip()]
+        if val is None:
+            return []
+        s = str(val).strip()
+        if not s:
+            return []
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(v).strip() for v in parsed if str(v).strip()]
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return [x.strip() for x in s.split(',') if x.strip()]
+
+    aliases_list = normalize_to_list(alias_names_raw)
+    keywords_list = normalize_to_list(keywords_raw)
+
+    # العمود نوعه JSON في الـ DB → خزّن الـ list نفسه (Python object)
+    # ومتعملش json.dumps هنا، عشان SQLAlchemy هو اللي بيسيّرلايز القيمة تلقائياً.
+    # لو عملت json.dumps هتتخزن سترينج جوه عمود JSON (double-encoding) مش array حقيقي.
     lab.description = description
-    lab.alias_names = alias_names
-    lab.keywords = keywords
+    lab.alias_names = aliases_list
+    lab.keywords = keywords_list
     lab.search_text = search_text
 
     try:
         db.session.commit()
 
-        # تحديث الـ embedding في FAISS بعد الاعتماد
+        vector_update_success = True
         try:
-            from knowledge.schemas import GeneratedKnowledge, AliasNames, EntityType
+            from knowledge.schemas import GeneratedKnowledge,EntityType
             from knowledge.pipeline import run_post_approval_stage
-
-            aliases_list = [a.strip() for a in alias_names.split(',') if a.strip()] if isinstance(alias_names, str) else (alias_names or [])
-            keywords_list = [k.strip() for k in keywords.split(',') if k.strip()] if isinstance(keywords, str) else (keywords or [])
 
             gen_obj = GeneratedKnowledge(
                 description=description or lab.name,
-                alias_names=AliasNames(aliases=aliases_list or [lab.name]),
+                alias_names=aliases_list or [lab.name],
                 keywords=keywords_list or [lab.name],
                 search_text=search_text or lab.name,
             )
             run_post_approval_stage(lab.id, EntityType.LAB, lab.name, gen_obj)
-        except Exception as pipe_err:
+        except Exception:
             import traceback
             print("=== VECTOR STORE UPDATE FAILED ===")
             traceback.print_exc()
-
-        return jsonify({"success": True, "message": "تم اعتماد حفظ المعرفة واعتمدت بنجاح في قاعدة البيانات وتحديث الفهرس الدلالي!"})
+            vector_update_success = False
+        if vector_update_success:
+             return jsonify({"success": True, "message": "تم اعتماد وحفظ المعرفة وتحديث الفهرس الدلالي بنجاح!"})
+        else:
+            return jsonify({
+                "success": True,
+                "message": "تم حفظ المعرفة في قاعدة البيانات، لكن فشل تحديث الفهرس الدلالي (semantic search) — التحليل مش هيظهر في البحث الدلالي لحد ما يتعمله rebuild يدوي.",
+                "vector_warning": True
+            })
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": f"حدث خطأ أثناء الحفظ: {str(e)}"})
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # Booking routes
@@ -1291,9 +1345,109 @@ def update_subscription_grace():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# Facebook webhook
-# ══════════════════════════════════════
+# Facebook Webhook with Multi-Image OCR, Debouncing & Typing
+# ══════════════════════════════════════════════════════════════════════════
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN") or os.environ.get("FB_VERIFY_TOKEN")
+
+USER_MESSAGE_BUFFERS = {}
+BUFFER_LOCK = threading.Lock()
+DEBOUNCE_DELAY = 5 # مدة الانتظار (ثانية ونصف) لتجميع الرسائل والصور المتتالية
+
+
+def _process_buffered_user_messages(page_id, sender_id):
+    """معالجة الرسائل والصور المدمجة وإرسال الرد والتذكرة."""
+    key = f"{page_id}:{sender_id}"
+    with BUFFER_LOCK:
+        buffered = USER_MESSAGE_BUFFERS.pop(key, None)
+
+    if not buffered:
+        return
+
+    with app.app_context():
+        try:
+            page = Page.query.filter_by(page_id=page_id).first()
+            if not page:
+                return
+
+            handler = FacebookHandler(page)
+            texts = [t for t in buffered["texts"] if t]
+            images = buffered["images"]
+
+            # دمج جميع النصوص المتتالية
+            combined_text = " \n ".join(texts).strip()
+
+            # 1. فحص الاشتراك
+            subscription = SubscriptionService.get_by_page(page)
+            allowed, _ = SubscriptionService.can_use_ai(subscription)
+            if not allowed:
+                logger.warning("Subscription limit reached for lab_id=%s", page.laboratory_id)
+                return
+
+            # 2. تشغيل إشارة الكتابة (Typing)
+            stop_typing = threading.Event()
+
+            def keep_typing():
+                while not stop_typing.is_set():
+                    handler.send_typing(sender_id)
+                    stop_typing.wait(3.0)
+
+            typing_thread = threading.Thread(target=keep_typing, daemon=True)
+            typing_thread.start()
+
+            try:
+                # 🖼️ 3. اختيار المعالجة حسب الصور المرسلة (صورة واحدة أو أكثر من صورة)
+                if len(images) > 1:
+                    from service.message_processor import handle_multi_image_messages
+                    reply, ticket_bytes = handle_multi_image_messages(images, page, combined_text)
+
+                elif len(images) == 1:
+                    final_message = images[0]
+                    final_message.text = combined_text or getattr(final_message, "text", "")
+                    reply, ticket_bytes = handler.handle(final_message)
+
+                elif buffered["last_message"]:
+                    final_message = buffered["last_message"]
+                    final_message.text = combined_text
+                    reply, ticket_bytes = handler.handle(final_message)
+                else:
+                    return
+
+            finally:
+                stop_typing.set()
+                typing_thread.join(timeout=1.0)
+
+            print(f"[DEBUG] [DEBOUNCED] sender={sender_id} has_reply={bool(reply)} has_ticket={bool(ticket_bytes)}")
+            logger.info(
+                "[FB] sender=%s has_reply=%s has_ticket=%s",
+                sender_id,
+                bool(reply),
+                bool(ticket_bytes),
+            )
+
+            # 💬 4. إرسال الرد
+            if reply:
+                handler.send(sender_id, reply)
+
+            # 🎫 5. إرسال تذكرة الحجز إن وجدت
+            if ticket_bytes:
+                handler.send_image(
+                    recipient_id=sender_id,
+                    file_bytes=ticket_bytes,
+                    filename="booking_ticket.png",
+                )
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[FB Debouncer] Processing error")
+            from notified_center.EmailSender import send_production_alert
+            send_production_alert(
+                subject="Facebook Webhook Worker Failure",
+                body_or_error=e,
+                context={"page_id": page_id, "sender_id": sender_id}
+            )
+        finally:
+            db.session.remove()
+
 
 @app.route("/webhook/facebook", methods=["GET", "POST"])
 def fb_webhook():
@@ -1322,72 +1476,60 @@ def fb_webhook():
 
                     handler = FacebookHandler(page)
 
+                    # 1. استقبال وتجميع رسائل الشات
                     for messaging in entry.get("messaging", []):
-
-                        message = parse_facebook_message(
+                        parsed_messages = parse_facebook_message(
                             messaging=messaging,
                             page_id=page.page_id,
                             platform_id=handler.platform_id,
                             platform_name=handler.platform_name,
                         )
-
-                        if not message:
+                        if not parsed_messages:
                             continue
-
-                        subscription = SubscriptionService.get_by_page(page)
-
-                        allowed, _ = SubscriptionService.can_use_ai(subscription)
-
-                        if not allowed:
-                            logger.warning(
-                                "Subscription limit reached for laboratory_id=%s",
-                                page.laboratory_id,
+                        if not isinstance(parsed_messages, list):
+                            parsed_messages = [parsed_messages]
+                        # تشغيل إشارة الـ Typing فوراً
+                        handler.send_typing(parsed_messages[0].sender_id)
+                        # 📥 إضافة كل رسالة وصورة في الـ Buffer
+                        key = f"{page.page_id}:{parsed_messages[0].sender_id}"
+                        with BUFFER_LOCK:
+                            if key not in USER_MESSAGE_BUFFERS:
+                                USER_MESSAGE_BUFFERS[key] = {
+                                    "texts": [],
+                                    "images": [],
+                                    "last_message": parsed_messages[-1],
+                                    "timer": None,
+                                }
+                            buf = USER_MESSAGE_BUFFERS[key]
+                            buf["last_message"] = parsed_messages[-1]
+                            for msg in parsed_messages:
+                                if msg.text and msg.text not in buf["texts"]:
+                                    buf["texts"].append(msg.text)
+                                if msg.type == "image" or getattr(msg, "media", None):
+                                    buf["images"].append(msg)
+                            # إعادة ضبط المؤقت
+                            if buf["timer"]:
+                                buf["timer"].cancel()
+                            t = threading.Timer(
+                                DEBOUNCE_DELAY,
+                                lambda p_id=page.page_id, s_id=parsed_messages[0].sender_id: webhook_executor.submit(
+                                    _process_buffered_user_messages, p_id, s_id
+                                ),
                             )
-                            break
+                            buf["timer"] = t
+                            t.start()
 
-                        handler.send_typing(message.sender_id)
 
-                        reply, ticket_bytes = handler.handle(message)
-                        print(f"[DEBUG] has_reply={bool(reply)} has_ticket={bool(ticket_bytes)}")  # ← أضف السطر ده
-                        logger.info(
-                            "[FB] sender=%s has_reply=%s has_ticket=%s",
-                            message.sender_id,
-                            bool(reply),
-                            bool(ticket_bytes),
-                        )
-
-                        if reply:
-                            handler.send(message.sender_id, reply)
-
-                        if ticket_bytes:
-                            handler.send_image(
-                                recipient_id=message.sender_id,
-                                file_bytes=ticket_bytes,
-                                filename="booking_ticket.png",
-                            )
-
+                    # 2. معالجة الكومنتات فوراً
                     for change in entry.get("changes", []):
-                        comment_id = parse_facebook_comment(change)
-                        if not comment_id:
-                            continue
-
-                        logger.debug("[FB] comment_id=%s", comment_id)
-                        handler.handle_comment(comment_id)
+                        comment_id = parse_facebook_comment(change, page_id=page.page_id)
+                        if comment_id:
+                            print(f"\n💬 [FB WEBHOOK] Valid comment from user detected: {comment_id}")
+                            handler.handle_comment(comment_id)
 
             except Exception as e:
                 db.session.rollback()
-                logger.exception("FB webhook processing error")
-
-                from notified_center.EmailSender import send_production_alert
-
-                send_production_alert(
-                    subject="Facebook Webhook Worker Failure",
-                    body_or_error=e,
-                    context={
-                        "entries_count": len(entries) if entries else 0
-                    }
-                )
-
+                logger.exception("FB webhook parsing error")
             finally:
                 db.session.remove()
 
@@ -1396,123 +1538,172 @@ def fb_webhook():
     return "OK", 200
 
 
-""" @app.route("/webhook/waha", methods=["POST"])
+# ══════════════════════════════════════════════════════════════════════════
+# WAHA (WhatsApp) Webhook with Multi-Image OCR, Debouncing & Typing
+# ══════════════════════════════════════════════════════════════════════════
+def _process_buffered_waha_messages(page_id, sender_id):
+    """معالجة رسائل وصور واتساب المدمجة (Debounced) وإرسال الرد والتذكرة."""
+    key = f"waha:{page_id}:{sender_id}"
+    with BUFFER_LOCK:
+        buffered = USER_MESSAGE_BUFFERS.pop(key, None)
+    if not buffered:
+        return
+    with app.app_context():
+        try:
+            whatsapp_platform = Platform.query.filter_by(name="whatsapp").first()
+            if not whatsapp_platform:
+                logger.error("[WAHA Debouncer] WhatsApp platform not found")
+                return
+            # البحث عن الصفحة المطابقة للـ session_name
+            page = Page.query.filter_by(page_id=page_id, platform_id=whatsapp_platform.id).first()
+            if not page:
+                page = Page.query.filter_by(platform_id=whatsapp_platform.id).first()
+            if not page:
+                logger.error("[WAHA Debouncer] Page not found for page_id=%s", page_id)
+                return
+            handler = WahaHandler(page)
+            texts = [t for t in buffered["texts"] if t]
+            images = buffered["images"]
+            # دمج جميع النصوص المتتالية
+            combined_text = " \n ".join(texts).strip()
+            # 1. فحص الاشتراك
+            subscription = SubscriptionService.get_by_page(page)
+            allowed, _ = SubscriptionService.can_use_ai(subscription)
+            if not allowed:
+                logger.warning("[WAHA] Subscription limit reached for lab_id=%s", page.laboratory_id)
+                return
+            # 2. تشغيل إشارة الكتابة (Typing) بشكل مستمر أثناء التفكير
+            stop_typing = threading.Event()
+            def keep_typing():
+                while not stop_typing.is_set():
+                    handler.send_typing(sender_id)
+                    stop_typing.wait(3.0)
+            typing_thread = threading.Thread(target=keep_typing, daemon=True)
+            typing_thread.start()
+            try:
+                # 🖼️ 3. اختيار المعالجة حسب الصور المرسلة (أكثر من صورة روشتة أو صورة واحدة أو نص فقط)
+                if len(images) > 1:
+                    from service.message_processor import handle_multi_image_messages
+                    reply, ticket_bytes = handle_multi_image_messages(images, page, combined_text)
+                elif len(images) == 1:
+                    final_message = images[0]
+                    final_message.text = combined_text or getattr(final_message, "text", "")
+                    reply, ticket_bytes = handler.handle(final_message)
+                elif buffered["last_message"]:
+                    final_message = buffered["last_message"]
+                    final_message.text = combined_text
+                    reply, ticket_bytes = handler.handle(final_message)
+                else:
+                    return
+            finally:
+                stop_typing.set()
+                typing_thread.join(timeout=1.0)
+            print(f"[DEBUG] [WAHA DEBOUNCED] sender={sender_id} has_reply={bool(reply)} has_ticket={bool(ticket_bytes)}")
+            logger.info(
+                "[WAHA] sender=%s has_reply=%s has_ticket=%s",
+                sender_id,
+                bool(reply),
+                bool(ticket_bytes),
+            )
+            # 💬 4. إرسال الرد النصي
+            if reply:
+                handler.send(sender_id, reply)
+            # 🎫 5. إرسال تذكرة الحجز إن وجدت
+            if ticket_bytes:
+                handler.send_image(
+                    recipient_id=sender_id,
+                    file_bytes=ticket_bytes,
+                    filename="booking_ticket.png",
+                )
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("[WAHA Debouncer] Processing error")
+            try:
+                from notified_center.EmailSender import send_production_alert
+                send_production_alert(
+                    subject="WAHA Webhook Worker Failure",
+                    body_or_error=e,
+                    context={"page_id": page_id, "sender_id": sender_id}
+                )
+            except Exception:
+                logger.exception("Failed to send production alert")
+        finally:
+            db.session.remove()
+@app.route("/webhook/waha", methods=["POST"])
 def waha_webhook():
-    logger.info("Webhook received")
-
+    logger.info("WAHA Webhook received")
     try:
         data = request.json or {}
-        logger.info(data)
     except Exception:
         return "OK", 200
-
     payload = data.get("payload", {})
     session_name = data.get("session")
-
     def process(payload, session_name):
         with app.app_context():
             try:
-                whatsapp_platform = Platform.query.filter_by(
-                    name="whatsapp"
-                ).first()
-
+                whatsapp_platform = Platform.query.filter_by(name="whatsapp").first()
                 if not whatsapp_platform:
                     logger.error("WhatsApp platform not found")
                     return
-
-                page = Page.query.filter_by(
-                    platform_id=whatsapp_platform.id
-                ).first()
-
+                # مطابقة الصفحة بالـ session_name للرقم المستلم
+                page = None
+                if session_name:
+                    page = Page.query.filter_by(
+                        platform_id=whatsapp_platform.id,
+                        page_id=session_name
+                    ).first()
                 if not page:
-                    logger.error("WhatsApp page not found")
+                    page = Page.query.filter_by(
+                        platform_id=whatsapp_platform.id
+                    ).first()
+                if not page:
+                    logger.error("WhatsApp page not found for session=%s", session_name)
                     return
-
-                logger.info(
-                    "Using WhatsApp page: %s",
-                    page.page_id
-                )
-
                 handler = WahaHandler(page)
-
-                # Subscription
-                subscription = SubscriptionService.get_by_page(page)
-
-                message = handler.parse_message(
-                    payload,
-                    page.page_id
-                )
-
+                # تحليل وفلترة الرسالة (تتجاهل fromMe والمجموعات تلقائياً)
+                message = handler.parse_message(payload, page.page_id)
                 if not message:
-                    logger.info("Message ignored")
                     return
-
-                allowed, _ = SubscriptionService.can_use_ai(subscription)
-
-                if not allowed:
-                    logger.warning(
-                        "Subscription limit reached for laboratory_id=%s",
-                        page.laboratory_id,
-                    )
-                    return
-
+                # تشغيل إشارة الـ Typing فوراً
                 handler.send_typing(message.sender_id)
-
-                # NOTE: handler.handle() -> run_agent() already deducts
-                # this message + its real cost from the subscription
-                # internally (see message_processor._consume_subscription).
-                # Do not call SubscriptionService.consume() again here —
-                # that would double-count usage for every reply sent.
-                reply, ticket_bytes = handler.handle(message)
-
-                logger.info(
-                    "[WAHA] sender=%s has_reply=%s has_ticket=%s",
-                    message.sender_id,
-                    bool(reply),
-                    bool(ticket_bytes),
-                )
-
-                if reply:
-                    handler.send(
-                        message.sender_id,
-                        reply,
+                # 📥 إضافة الرسالة والصور في الـ Buffer وتفعيل الـ Debounce
+                key = f"waha:{page.page_id}:{message.sender_id}"
+                with BUFFER_LOCK:
+                    if key not in USER_MESSAGE_BUFFERS:
+                        USER_MESSAGE_BUFFERS[key] = {
+                            "texts": [],
+                            "images": [],
+                            "last_message": message,
+                            "timer": None,
+                        }
+                    buf = USER_MESSAGE_BUFFERS[key]
+                    buf["last_message"] = message
+                    if message.text and message.text not in buf["texts"]:
+                        buf["texts"].append(message.text)
+                    if message.type == "image" or getattr(message, "media", None):
+                        buf["images"].append(message)
+                    # إعادة ضبط المؤقت
+                    if buf["timer"]:
+                        buf["timer"].cancel()
+                    t = threading.Timer(
+                        DEBOUNCE_DELAY,
+                        lambda p_id=page.page_id, s_id=message.sender_id: webhook_executor.submit(
+                            _process_buffered_waha_messages, p_id, s_id
+                        ),
                     )
-
-                if ticket_bytes:
-                    handler.send_image(
-                        recipient_id=message.sender_id,
-                        file_bytes=ticket_bytes,
-                        filename="booking_ticket.png",
-                    )
-
+                    buf["timer"] = t
+                    t.start()
             except Exception as e:
                 db.session.rollback()
-                logger.exception("WAHA webhook processing error")
-
-                try:
-                    from notified_center.EmailSender import send_production_alert
-
-                    send_production_alert(
-                        subject="WAHA Webhook Worker Failure",
-                        body_or_error=e,
-                        context={
-                            "session_name": session_name
-                        }
-                    )
-
-                except Exception:
-                    logger.exception("Failed to send production alert")
-
+                logger.exception("WAHA webhook parsing error")
             finally:
                 db.session.remove()
-
     webhook_executor.submit(
         process,
         payload,
         session_name,
     )
-
-    return "OK", 200 """
+    return "OK", 200
 # ══════════════════════════════════════════════════════════════════════════
 # Run
 # ══════════════════════════════════════════════════════════════════════════

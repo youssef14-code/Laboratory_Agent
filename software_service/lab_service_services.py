@@ -103,7 +103,25 @@ class LabServiceService(BaseService):
         lab = db.session.get(LabService, lab_id)
         if not lab:
             return None, "التحليل غير موجود"
-        return BaseService.delete(lab, success_msg="تم حذف التحليل بنجاح", error_prefix="حدث خطأ أثناء الحذف")
+
+        deleted_lab, msg = BaseService.delete(
+            lab, success_msg="تم حذف التحليل بنجاح", error_prefix="حدث خطأ أثناء الحذف"
+        )
+
+        # لو الحذف من الداتابيز نجح، لازم نشيل الـ vector بتاعه من FAISS
+        # كمان، وإلا هيفضل يتيم فيه ويطلع في نتائج semantic search لتحليل
+        # اتمسح فعلياً. فشل مسح الـ vector ملوش داعي يفشّل عملية الحذف
+        # نفسها -- بس بنسجله عشان نلاحظه لو حصل.
+        if deleted_lab is not None:
+            try:
+                from knowledge.vector_store import delete_vector
+                delete_vector(lab_id)
+            except Exception:
+                import traceback
+                print(f"=== VECTOR STORE DELETE FAILED for lab_id={lab_id} ===")
+                traceback.print_exc()
+
+        return deleted_lab, msg
 
     # -- used elsewhere (e.g. inquiry review dropdown) -----------------------------
 
