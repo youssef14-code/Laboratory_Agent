@@ -1,0 +1,115 @@
+services:
+
+  db:
+    image: mysql:8.0
+    container_name: safot_shaker-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-01554019172Ra@}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+
+
+  web:
+    build: .
+    container_name: safot_shaker-labs-agent
+    restart: always
+    ports:
+      - "2208:4500"
+    volumes:
+      - ./instance:/app/instance
+      - ./static/uploads:/app/static/uploads
+      - ./faiss_index:/app/faiss_index
+    env_file:
+      - .env
+    environment:
+      - SQLALCHEMY_DATABASE_URI=${MAIN_DATABASE_URL}
+      - WAHA_API_KEY=${WAHA_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      waha1:
+        condition: service_started
+      waha2:
+        condition: service_started
+      waha3:
+        condition: service_started
+      waha4:
+        condition: service_started
+      waha5:
+        condition: service_started      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4500/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - internal
+
+  waha1:
+    image: devlikeapro/waha
+    container_name: safot_shaker-waha1
+    restart: always
+    shm_size: '2gb'
+    ports:
+      - "3010:3000"
+    environment:
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - WH_URL=http://web:4500/webhook/waha
+      - WH_EVENTS=message.upsert,message.any
+      - WAHA_SESSION_STORE=FILE
+      - WAHA_SESSIONS_DIR=/app/.sessions
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
+      - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
+      - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
+      - WAHA_BASE_URL=http://waha1:3000    
+    volumes:
+      - ./waha_sessions1:/app/.sessions
+    networks:
+      - internal
+  waha2:
+    image: devlikeapro/waha
+    container_name: safot_shaker-waha2
+    restart: always
+    shm_size: '2gb'
+    ports:
+      - "3011:3000"
+    environment:
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - WH_URL=http://web:4500/webhook/waha
+      - WH_EVENTS=message.upsert,message.any
+      - WAHA_SESSION_STORE=FILE
+      - WAHA_SESSIONS_DIR=/app/.sessions
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
+      - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
+      - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
+      - WAHA_BASE_URL=http://waha2:3000    
+    volumes:
+      - ./waha_sessions2:/app/.sessions
+    networks:
+      - internal 
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  mysqldata:
