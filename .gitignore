@@ -1,5 +1,40 @@
-env
+# Environment variables
 .env
+.env.*
+
+# Virtual environment
+myenv/
+venv/
+env/
+
+# Python cache
 __pycache__/
-instance/
-*.pyc   
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Database files
+*.db
+*.sqlite3
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build files
+build/
+dist/
+*.egg-info/
+
+
+/waha_sessions
+/waha_sessions/default

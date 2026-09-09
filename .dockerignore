@@ -1,0 +1,6 @@
+waha_sessions/
+.git/
+__pycache__/
+*.pyc
+.env
+static/uploads/
