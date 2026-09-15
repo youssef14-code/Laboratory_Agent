@@ -5,7 +5,8 @@ import os
 import requests
 
 from platforms.base_handler import BaseHandler
-from notified_center import send_production_alert, WahaAPIException, MediaDownloadException
+from notified_center.EmailSender import send_production_alert
+
 
 logger = logging.getLogger(__name__)
 

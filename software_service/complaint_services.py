@@ -13,7 +13,7 @@ class ComplaintService(BaseService):
     # ── read ──────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def get_all_complaints(page=1, per_page=10, search=None, status=None):
+    def get_all_complaints(page=1, per_page=10, search=None, status=None, source=None):
         query = Complaint.query
 
         if search:
@@ -30,6 +30,17 @@ class ComplaintService(BaseService):
                 query = query.filter(Complaint.status == Status(status))
             except ValueError:
                 pass
+
+        # 🏢 فلترة الفروع والمصدر
+        if source:
+            if source == "facebook":
+                query = query.filter(db.or_(Complaint.comes_from.ilike('%فيسبوك%'), Complaint.comes_from.ilike('%facebook%')))
+            elif source == "branch_1":
+                query = query.filter(db.or_(Complaint.comes_from.ilike('%فيكتوريا%'), Complaint.comes_from.ilike('%الجلاء%'), Complaint.comes_from.ilike('%222497324699829%')))
+            elif source == "branch_2":
+                query = query.filter(db.or_(Complaint.comes_from.ilike('%باكوس%'), Complaint.comes_from.ilike('%الفتح%')))
+            else:
+                query = query.filter(Complaint.comes_from.ilike(f'%{source}%'))
 
         query = query.order_by(Complaint.created_at.desc())
         return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الشكاوى")
@@ -93,4 +104,4 @@ class ComplaintService(BaseService):
             status=Status.PENDING,
             created_at=datetime.now(timezone.utc),
         )
-        return BaseService.commit(complaint, success_msg="تم تسجيل الشكوى بنجاح", error_prefix="حدث خطأ أثناء تسجيل الشكوى")
+        return BaseService.commit(complaint, success_msg="تم تسجيل الشكوى بنجاح", error_prefix="حدث خطأ أثناء تسجيل الشكوى")

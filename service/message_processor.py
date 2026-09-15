@@ -131,6 +131,30 @@ def _consume_subscription(message: "IncomingMessage", usage: dict) -> None:
     except Exception as e:
         print(f"[_consume_subscription] Error: {e}")
 
+def _consume_subscription_direct(message: "IncomingMessage", count: int = 1) -> None:
+    """خصم رسائل من الاشتراك مباشرة بعدد محدد (بدون حساب tokens)."""
+    try:
+        from software_service.subscripition_service import SubscriptionService
+        from models.models import Page
+
+        page = Page.query.filter_by(
+            page_id=message.page_id,
+            platform_id=message.platform_id,
+        ).first()
+
+        if not page:
+            return
+
+        subscription = SubscriptionService.get_by_page(page)
+        if not subscription:
+            return
+
+        SubscriptionService.consume(subscription, count=count, cost=None)
+        print(f"[_consume_subscription_direct] ✅ Consumed {count} message(s) from subscription.")
+
+    except Exception as e:
+        print(f"[_consume_subscription_direct] Error: {e}")
+
 
 def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, bytes | None]:
 
@@ -335,15 +359,18 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
 
         ocr_usage = ocr_result.get("ocr_usage")
 
+        # ✅ روشتة ناجحة (OCR 90%+) = 2 رسائل (1 من LLM + 1 إضافي للـ OCR)
         if ocr_result.get("success"):
             extracted_text = ocr_result.get("extracted_text", "")
             message.text = f"[Prescription OCR Extracted Text]:\n{extracted_text}"
-            return run_agent(message, ocr_usage=ocr_usage)
+            result_text, ticket = run_agent(message, ocr_usage=ocr_usage)
+            _consume_subscription_direct(message, count=1)  # ✅ +1 إضافي للـ OCR
+            return result_text, ticket
 
+        # ⏳ روشتة للدكتور = رسالة واحدة
         if ocr_result.get("classified_as") == "prescription":
             static_reply = "لقد استلمنا صورتك وسيقوم الطبيب بمراجعتها والرد عليك."
             user_display_msg = message.text or "📷 [تم إرسال صورة روشتة طبية]"
-
 
             ClientService.save_chat_exchange(
                 platform_id=message.platform_id,
@@ -355,8 +382,10 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
             )
 
             count_request()
+            _consume_subscription_direct(message, count=1)  # ✅ روشتة للدكتور = رسالة واحدة
             return static_reply, None
 
+        # 🚫 صورة Spam — لا يُحسب شيء
         not_prescription_reply = (
             "عذراً، يبدو أن الصورة المرفقة ليست روشتة طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل."
         )
@@ -367,8 +396,9 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
             user_message=message.text or "📷 [صورة غير واضحة]",
             bot_reply=not_prescription_reply,
         )
-        
-        return (
+        _consume_subscription_direct(message, count=1)  # ✅ Spam = رسالة واحدة
+
+        return ( 
             not_prescription_reply,
             None,
         )
@@ -395,19 +425,39 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
 
 
 def handle_multi_image_messages(image_messages: list, page, combined_text: str = "") -> tuple[str, bytes | None]:
-    """معالجة عدة صور روشتات معاً بذكاء وفصل الروشتات المقروءة عن التي تحتاج مراجعة الطبيب."""
+    """معالجة عدة صور روشتات معاً بذكاء وإحصاء المقروء، والمحول للطبيب، والـ Spam."""
+    total_images_count = len(image_messages)
     all_extracted_texts = []
     unreadable_prescriptions_count = 0
+    spam_images_count = 0  # 👈 عداد الصور غير الصالحة / Spam
     total_ocr_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    waha_handler = None
 
     for idx, msg in enumerate(image_messages):
         try:
-            image_url = msg.media.get("url") if msg.media else None
-            if not image_url:
-                continue
+            image_bytes = None
 
-            img_res = requests.get(image_url, timeout=30)
-            if img_res.status_code != 200:
+            # 1. WhatsApp / WAHA
+            if (msg.platform_name or "").lower() == "whatsapp" or getattr(msg, "platform_id", None) == 2:
+                if not waha_handler:
+                    from platforms.waha_handler import WahaHandler
+                    waha_handler = WahaHandler(page)
+                image_bytes = waha_handler.download_media(msg.media, "image")
+
+            # 2. Facebook / Other platforms
+            else:
+                image_url = msg.media.get("url") if msg.media else None
+                if not image_url:
+                    continue
+
+                img_res = requests.get(image_url, timeout=30)
+                if img_res.status_code == 200:
+                    image_bytes = img_res.content
+
+            if not image_bytes:
+                print(f"[Multi-OCR Warning] Failed to download image #{idx+1}")
+                spam_images_count += 1
                 continue
 
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -416,7 +466,7 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
             image_path = os.path.join(uploads_dir, f"{uuid.uuid4().hex}.jpg")
 
             with open(image_path, "wb") as f:
-                f.write(img_res.content)
+                f.write(image_bytes)
 
             # تشغيل OCR على كل صورة
             ocr_result = process_prescription_ocr(
@@ -433,51 +483,61 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
                 total_ocr_usage["output_tokens"] += usage.get("output_tokens", 0)
                 total_ocr_usage["total_tokens"] += usage.get("total_tokens", 0)
 
-            # ✅ 1. الروشتة الناجحة فقط (ثقة 90% فأكثر)
+            # ✅ 1. روشتة ناجحة ومقروءة
             if ocr_result.get("success"):
                 extracted = ocr_result.get("extracted_text", "")
                 all_extracted_texts.append(f"--- [Prescription Image #{idx+1} - Confirmed] ---\n{extracted}")
 
-            # ⏳ 2. الروشتة غير الواضحة (ثقة منخفضة) -> مراجعة الطبيب
+            # ⏳ 2. روشتة غير واضحة -> مراجعة الطبيب
             elif ocr_result.get("classified_as") == "prescription":
                 unreadable_prescriptions_count += 1
 
+            # 🚫 3. صورة Spam / ليست روشتة طبية
+            else:
+                spam_images_count += 1
+
         except Exception as e:
             print(f"[Multi-OCR Error] image #{idx+1}: {e}")
+            spam_images_count += 1
 
-    # 🎯 الحالة الأولى: كل الروشتات المرفقة تحتاج مراجعة الطبيب (لم تنجح أي واحدة بنسبة 90%)
-    if not all_extracted_texts and unreadable_prescriptions_count > 0:
-        static_reply = "لقد استلمنا صورتك وسيقوم الطبيب بمراجعتها والرد عليك."
+    # 🎯 الحالة الأولى: كل الصور للدكتور أو سبام ولم تنجح أي روشتة
+    if not all_extracted_texts:
+        if unreadable_prescriptions_count > 0:
+            static_reply = f"لقد استلمنا صورك ({unreadable_prescriptions_count} روشتة) وسيقوم الطبيب بمراجعتها والرد عليك."
+            if spam_images_count > 0:
+                static_reply += f"\n(ملاحظة: توجد {spam_images_count} صورة مرفقة ليست روشتات طبية واضحة)."
+        else:
+            static_reply = "عذراً، الصور المرفقة ليست روشتات طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل."
+
         last_msg = image_messages[-1]
         ClientService.save_chat_exchange(
             platform_id=last_msg.platform_id,
             page_id=last_msg.page_id,
             sender_id=last_msg.sender_id,
-            user_message=last_msg.text or "📷 [تم إرسال صورة روشتة طبية]",
+            user_message=last_msg.text or "📷 [تم إرسال عدة صور]",
             bot_reply=static_reply,
-            summary="User uploaded a prescription image. Waiting for manual doctor review on dashboard.",
+            summary="User uploaded images. Waiting for doctor review or invalid images.",
         )
         count_request()
+        _consume_subscription_direct(last_msg, count=total_images_count)
         return static_reply, None
 
-    # 🎯 الحالة الثانية: توجد روشتة واحدة على الأقل واضحة وناجحة (90%+)
+    # 🎯 الحالة الثانية: توجد روشتات مقروءة وناجحة (الـ Agent هيرد بتنسيق منظم)
     if all_extracted_texts:
         merged_ocr = "\n\n".join(all_extracted_texts)
+
+        # إضافة تقرير الصور الأخرى للموديل
+        notes = []
         if unreadable_prescriptions_count > 0:
-            merged_ocr += f"\n\n[Doctor Review Note]: ({unreadable_prescriptions_count} other uploaded prescription image(s) had unclear handwriting and was sent to the doctor for manual review. Inform the patient politely.)"
+            notes.append(f"[Doctor Review Note]: There are {unreadable_prescriptions_count} other uploaded prescription image(s) with unclear handwriting that were sent to the doctor for manual review.")
+        if spam_images_count > 0:
+            notes.append(f"[Invalid Images Note]: There are {spam_images_count} image(s) that are NOT valid medical prescriptions (e.g. products, random photos, unreadable).")
+
+        if notes:
+            merged_ocr += "\n\n" + "\n".join(notes)
 
         last_msg = image_messages[-1]
         last_msg.text = f"[Prescription OCR Extracted Text]:\n{merged_ocr}\n\nUser Notes: {combined_text}"
-        return run_agent(last_msg, ocr_usage=total_ocr_usage)
-
-    # 🎯 الحالة الثالثة: الصور المرفقة ليست روشتات طبية
-    not_presc_reply = "عذراً، يبدو أن الصور المرفقة ليست روشتات طبية واضحة. يرجى إرسال صورة روشتة صحيحة لطلب التحاليل."
-    last_msg = image_messages[-1]
-    ClientService.save_chat_exchange(
-        platform_id=last_msg.platform_id,
-        page_id=last_msg.page_id,
-        sender_id=last_msg.sender_id,
-        user_message=last_msg.text or "📷 [صورة غير واضحة]",
-        bot_reply=not_presc_reply,
-    )
-    return not_presc_reply, None
+        result_text, ticket = run_agent(last_msg, ocr_usage=total_ocr_usage)
+        _consume_subscription_direct(last_msg, count=total_images_count)
+        return result_text, ticket

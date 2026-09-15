@@ -25,10 +25,11 @@ def save_complaint_tool(
     """
     platform_name = get_platform_name(comes_from)
 
+    # ✅ حفظ النص القادم من الـ Mapping مباشرة بدون تحويله إلى "WhatsApp"
     complaint, message = ComplaintService.create_complaint(
         phone_number=phone,
         complaint_text=complaint_text,
-        comes_from=platform_name,
+        comes_from=comes_from,
     )
 
     is_success = complaint is not None

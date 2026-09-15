@@ -706,9 +706,10 @@ def list_bookings():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '').strip() or None
     status = request.args.get('status', '').strip() or None
+    source = request.args.get('source', '').strip() or None  # 👈 استقبال الفلتر
 
     pagination, msg = HomeVisitService.get_all_bookings(
-        page=page, per_page=10, search=search, status=status
+        page=page, per_page=10, search=search, status=status, source=source
     )
 
     if pagination is None:
@@ -726,6 +727,7 @@ def list_bookings():
         pagination=pagination,
         search=search,
         status_filter=status,
+        source_filter=source,  # 👈 تمرير الفلتر للـ HTML
         stats=stats,
         all_statuses=Status,
     )
@@ -984,10 +986,16 @@ def delete_inquiry(inquiry_id):
 def list_complaints():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '').strip()
-    status = request.args.get('status', '')
+    status = request.args.get('status', '').strip()
+    source = request.args.get('source', '').strip()
+
+    # تنظيف القيم الفارغة وكلمة None
+    search_clean = None if not search or search == "None" else search
+    status_clean = None if not status or status == "None" else status
+    source_clean = None if not source or source == "None" else source
 
     pagination, _ = ComplaintService.get_all_complaints(
-        page=page, per_page=10, search=search or None, status=status or None
+        page=page, per_page=10, search=search_clean, status=status_clean, source=source_clean
     )
     stats = ComplaintService.get_stats()
 
@@ -995,8 +1003,9 @@ def list_complaints():
         'complaints/list.html',
         complaints=pagination.items,
         pagination=pagination,
-        search=search,
-        status=status,
+        search=search_clean or '',
+        status=status_clean or '',
+        source_filter=source_clean or '',
         statuses=Status,
         stats=stats,
     )
@@ -1351,7 +1360,7 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN") or os.environ.get("FB_VERIFY_TOKEN
 
 USER_MESSAGE_BUFFERS = {}
 BUFFER_LOCK = threading.Lock()
-DEBOUNCE_DELAY = 5 # مدة الانتظار (ثانية ونصف) لتجميع الرسائل والصور المتتالية
+DEBOUNCE_DELAY = 10 # مدة الانتظار  لتجميع الرسائل والصور المتتالية
 
 
 def _process_buffered_user_messages(page_id, sender_id):

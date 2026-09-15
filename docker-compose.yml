@@ -43,12 +43,7 @@ services:
         condition: service_started
       waha2:
         condition: service_started
-      waha3:
-        condition: service_started
-      waha4:
-        condition: service_started
-      waha5:
-        condition: service_started      
+            
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4500/health"]
       interval: 15s

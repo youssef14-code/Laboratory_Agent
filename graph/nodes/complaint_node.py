@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from graph.nodes.complaint_tool import save_complaint_tool
 from graph.schemas.complaint_sechema import ComplaintResponse
 from graph.state import AgentState
-from graph.utils import detect_language_fallback
+from graph.utils import detect_language_fallback, get_source_label
 from llm.llm import get_gemini
 from software_service.client_services import ClientService
 
@@ -138,7 +138,7 @@ RECENT CHAT HISTORY (Last Exchanges)
             result = save_complaint_tool.invoke(
                 input={
                     **complaint_data,
-                    "comes_from": str(platform_id or "unknown"),
+                    "comes_from": get_source_label(state.get("platform_name"), platform_id, page_id),
                 }
             )
 

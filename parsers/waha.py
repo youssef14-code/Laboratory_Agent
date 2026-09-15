@@ -74,6 +74,17 @@ def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str =
         if has_media and media:
             mimetype = media.get("mimetype", "")
 
+            # فحص التعليق المكتوب مع الصورة وتجاهل الـ Base64 الضخم
+            caption = payload.get("caption")
+            if not caption and msg_body:
+                # إذا كان الـ body هو كود Base64 طويل نتجاهله
+                if not str(msg_body).startswith(("/9j/", "data:image", "JVBERi0")) and len(str(msg_body)) < 1000:
+                    caption = msg_body
+                else:
+                    caption = "📷 [صورة مرفقة]"
+            else:
+                caption = caption or "📷 [صورة مرفقة]"
+
             if "image/webp" in mimetype:
                 msg_type = "sticker"
             elif "image/" in mimetype:
@@ -93,7 +104,7 @@ def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str =
                 platform_id=platform_id,
                 platform_name=platform_name,
                 msg_type=msg_type,
-                text=msg_body,
+                text=caption,  # 👈 حفظ التعليق أو "صورة مرفقة" بدلاً من الـ Base64
                 media=media,
             )
 

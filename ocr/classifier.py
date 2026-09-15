@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Single source of truth for the confidence threshold. Import this from
 # service.py instead of redefining it there — two copies of the same
 # constant is how they drift out of sync.
-CONFIDENCE_THRESHOLD = 90
+CONFIDENCE_THRESHOLD = 85
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
 
@@ -76,10 +76,17 @@ STEP 1: COUNT TOTAL TESTS (CRITICAL)
 ====================
 Before extracting the details of each test, you MUST count the TOTAL number of tests requested in the image.
 - Count every clear marked checkbox.
-- Count every handwritten or typed test name.
+- Count every handwritten or typed test name only when it is written as
+  a free-text request and is not merely a printed label beside a checkbox.
+- For checkbox panels, count only:
+  1. CLEAR_MARK items, and
+  2. AMBIGUOUS or LOW_VISIBILITY items when a possible selection mark is visible.
+- Never count a printed test label beside an EMPTY checkbox.
+
 - Include unreadable or ambiguous tests in your count.
 - Output this total exact number as "total_tests_detected".
-
+- This is the initial count before parent–child consolidation.
+- Recalculate "total_tests_detected" after applying STEP 5.
 
 ====================
 EXTRACTION RULES & ANTI-HALLUCINATION (STRICT — CRITICAL)
@@ -185,7 +192,62 @@ patient-specific medical document at all. false for "lab_prescription",
 "medical_report", or "radiology_request".
 
 ====================
-STEP 5: JSON OUTPUT STRUCTURE
+STEP 5: PARENT–CHILD TEST CONSOLIDATION
+====================
+Apply this step only AFTER determining which tests are genuinely requested
+according to STEP 2 and STEP 3.
+
+A test is considered requested only when:
+- Its checkbox has a CLEAR_MARK, or
+- Its name is directly written as free text.
+
+A printed test name beside an EMPTY, AMBIGUOUS, or LOW_VISIBILITY checkbox
+must NOT activate a parent–child rule.
+
+Some laboratory tests have predefined parent–child relationships.
+
+Rules:
+- If both a parent test and one or more of its child tests are genuinely
+  requested, include ONLY the parent test in the final "labs" array.
+- Remove the child tests from the final "labs" array.
+- If only a child test is genuinely requested and its parent is not
+  genuinely requested, include the child test normally.
+- Never add, infer, or substitute a parent test that is not genuinely
+  requested in the image.
+- Use ONLY the parent–child mappings explicitly provided below.
+- The returned parent item must preserve its own "matched_text", "source",
+  and "confidence". Do not copy these values from the removed child.
+- Parent–child filtering applies only to the final "labs" array.
+- "raw_transcription" may still contain both names exactly as visible
+  in the image.
+- After applying this consolidation, count the parent and its removed
+  children as ONE requested test in "total_tests_detected".
+
+Provided mapping:
+- Parent: Urine Culture & Sensitivity
+- Child: Complete Urine Analysis
+
+Example:
+
+Genuinely requested tests:
+- Complete Urine Analysis
+- Urine Culture & Sensitivity
+
+Correct final output:
+{
+  "total_tests_detected": 1,
+  "labs": [
+    {
+      "standardized_name": "Urine Culture & Sensitivity",
+      "matched_text": "Urine culture & sensitivity",
+      "confidence": 98,
+      "source": "written_text"
+    }
+  ]
+}
+
+====================
+STEP 6: JSON OUTPUT STRUCTURE
 ====================
 Return ONLY valid JSON.
 {
@@ -280,7 +342,7 @@ def analyze_prescription(image_path: str) -> dict:
 
         start = time.time()
         response = gemini_client.models.generate_content(
-            model="gemini-3.5-flash-lite",
+            model="gemini-3.6-flash",
             contents=[img, _PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -331,8 +393,22 @@ def analyze_prescription(image_path: str) -> dict:
         )
         return _safe_error(notes)
 
+    # ── تأكد أن data هو dict وليس list ────────────────────────────────────────
+    # أحياناً Gemini يُرجع الـ JSON على شكل Array بدلاً من Object
+    if isinstance(data, list):
+        if data and isinstance(data[0], dict):
+            data = data[0]   # خذ أول عنصر من الـ Array
+        else:
+            notes = f"Unexpected JSON array structure from Gemini | raw: {response.text[:200]}"
+            logger.error("❌ [OCR] %s", notes)
+            return _safe_error(notes)
+    if not isinstance(data, dict):
+        notes = f"Unexpected JSON type={type(data).__name__} from Gemini | raw: {response.text[:200]}"
+        logger.error("❌ [OCR] %s", notes)
+        return _safe_error(notes)
+
     # This response reflects a real (if possibly low-confidence) model
-    # judgement, so it is NOT a technical error.
+    # judgement, so it is NOT a technical error.    
     data["is_error"] = False
     data["ocr_usage"] = ocr_usage
     data.setdefault("is_spam", not data.get("is_prescription", False))

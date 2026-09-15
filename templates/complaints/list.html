@@ -69,16 +69,25 @@
         type="text"
         name="search"
         placeholder="بحث برقم الهاتف أو نص الشكوى..."
-        value="{{ search }}"
+        value="{{ search or '' }}"
         class="search-input"
       >
     </div>
 
+    <!-- فلترة الحالات -->
     <select name="status" class="form-control" style="width:160px" onchange="this.form.submit()">
       <option value="">كل الحالات</option>
       {% for s in statuses %}
       <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.value }}</option>
       {% endfor %}
+    </select>
+
+    <!-- 🏢 فلترة الفروع والمصادر -->
+    <select name="source" class="form-control" style="width:auto;" onchange="this.form.submit()">
+      <option value="">كل الفروع والمصادر</option>
+      <option value="branch_1" {% if source_filter == 'branch_1' %}selected{% endif %}>واتساب - فرع فيكتوريا</option>
+      <option value="branch_2" {% if source_filter == 'branch_2' %}selected{% endif %}>واتساب - فرع باكوس</option>
+      <option value="facebook" {% if source_filter == 'facebook' %}selected{% endif %}>فيسبوك / ماسنجر</option>
     </select>
 
     <button type="submit" class="btn btn-primary">بحث</button>

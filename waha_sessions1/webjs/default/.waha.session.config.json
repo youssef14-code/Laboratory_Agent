@@ -1,0 +1,1 @@
+{"metadata":{},"webhooks":[{"url":"https://safwat-shaker-lab.revyai.tech/webhook/waha","events":["message"],"hmac":{"key":null},"retries":{"delaySeconds":2,"attempts":15,"policy":"exponential"},"customHeaders":null}],"webjs":{"tagsEventsOn":false},"client":null}

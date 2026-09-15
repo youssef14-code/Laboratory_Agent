@@ -15,7 +15,7 @@ class HomeVisitService(BaseService):
     # ── list / search ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def get_all_bookings(page=1, per_page=10, search=None, status=None):
+    def get_all_bookings(page=1, per_page=10, search=None, status=None, source=None):
         query = Homevisit.query
 
         if search:
@@ -24,6 +24,7 @@ class HomeVisitService(BaseService):
                     Homevisit.name.ilike(f'%{search}%'),
                     Homevisit.phone_number.ilike(f'%{search}%'),
                     Homevisit.reference_id.ilike(f'%{search}%'),
+                    Homevisit.comes_from.ilike(f'%{search}%'),
                 )
             )
 
@@ -32,6 +33,17 @@ class HomeVisitService(BaseService):
                 query = query.filter(Homevisit.status == Status(status))
             except ValueError:
                 pass
+
+        # 🏢 فلترة الفروع والمصدر
+        if source:
+            if source == "facebook":
+                query = query.filter(db.or_(Homevisit.comes_from.ilike('%فيسبوك%'), Homevisit.comes_from.ilike('%facebook%')))
+            elif source == "branch_1":
+                query = query.filter(db.or_(Homevisit.comes_from.ilike('%فيكتوريا%'), Homevisit.comes_from.ilike('%الجلاء%'), Homevisit.comes_from.ilike('%222497324699829%')))
+            elif source == "branch_2":
+                query = query.filter(db.or_(Homevisit.comes_from.ilike('%باكوس%'), Homevisit.comes_from.ilike('%الفتح%')))
+            else:
+                query = query.filter(Homevisit.comes_from.ilike(f'%{source}%'))
 
         query = query.order_by(Homevisit.booking_time.desc())
         return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الحجوزات")

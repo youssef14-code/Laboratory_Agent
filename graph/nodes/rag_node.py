@@ -16,7 +16,7 @@ def rag_node(state: AgentState) -> dict:
     if not refined_queries:
         logger.info("[RAG Node] Skipped (No refined queries) | sender_id=%s", sender_id)
         return {
-            "rag_context": state.get("rag_context", ""),
+            "rag_context": "",
             "search_results": [],
             "top_score": 0.0,
         }
@@ -25,7 +25,7 @@ def rag_node(state: AgentState) -> dict:
     queries = [rq for rq in refined_queries if rq and getattr(rq, "query", None)]
     if not queries:
         return {
-            "rag_context": state.get("rag_context", ""),
+            "rag_context": "",
             "search_results": [],
             "top_score": 0.0,
         }

@@ -241,10 +241,18 @@ class ClientService(BaseService):
         """
         try:
             safe_max_history = max(1, int(max_history))
-            clean_user_message = (
-                str(user_message or "").strip()
-                or "[رسالة بدون نص أو تحتوي على مرفق]"
-            )
+
+            clean_user_message = str(user_message or "").strip()
+
+            # 👈 حماية من تخزين Base64 أو نصوص ضخمة في الداتابيز
+            if (
+                clean_user_message.startswith(("/9j/", "data:image", "JVBERi0", "iVBORw"))
+                or len(clean_user_message) > 5000
+            ):
+                clean_user_message = "📷 [صورة أو ملف مرفق]"
+            elif not clean_user_message:
+                clean_user_message = "[رسالة بدون نص أو تحتوي على مرفق]"
+
             clean_bot_reply = str(bot_reply or "").strip()
             clean_summary = str(summary or "").strip()
 
@@ -318,4 +326,3 @@ class ClientService(BaseService):
                 logger.exception("Failed to send save_chat_exchange alert")
 
             return None, f"حدث خطأ أثناء حفظ سجل المحادثة: {error}"
-
