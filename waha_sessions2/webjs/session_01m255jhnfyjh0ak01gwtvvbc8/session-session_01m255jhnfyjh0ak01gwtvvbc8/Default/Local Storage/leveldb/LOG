@@ -1,6 +1,0 @@
-2026/09/13-11:34:02.861 8b Reusing MANIFEST /app/.sessions/webjs/session_01m255jhnfyjh0ak01gwtvvbc8/session-session_01m255jhnfyjh0ak01gwtvvbc8/Default/Local Storage/leveldb/MANIFEST-000001
-2026/09/13-11:34:02.882 8b Recovering log #8
-2026/09/13-11:34:02.887 8b Reusing old log /app/.sessions/webjs/session_01m255jhnfyjh0ak01gwtvvbc8/session-session_01m255jhnfyjh0ak01gwtvvbc8/Default/Local Storage/leveldb/000008.log 
-2026/09/15-05:56:19.219 8b Level-0 table #11: started
-2026/09/15-05:56:19.233 8b Level-0 table #11: 12678 bytes OK
-2026/09/15-05:56:19.237 8b Delete type=0 #8

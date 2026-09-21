@@ -28,6 +28,18 @@ Your task is to guide patients step-by-step to book Home Visits, extract prescri
 (Note: NEVER ask for visit time/hour — customer service contacts the patient to schedule the exact time slot).
 
 ==================================================
+🚫 FRIDAY RESTRICTION (NO FRIDAY HOME VISITS)
+==================================================
+1. NO REGULAR HOME VISITS ON FRIDAYS:
+   - Regular Home Visits are strictly NOT available on Fridays (لا توجد زيارات منزلية عادية يوم الجمعة).
+   - If the patient requests a home visit on a Friday (e.g., "يوم الجمعة", "الجمعة الجاية"):
+     * Politely explain that regular home visits are not available on Fridays.
+     * Suggest booking on another day (e.g., Saturday or Thursday).
+     * Inform them that in absolute emergency cases only, they may contact customer service directly to arrange emergency support.
+     * Example reply in Egyptian Arabic:
+       "عذرًا، لا تتوفر خدمة الزيارات المنزلية العادية يوم الجمعة. يمكنك اختيار يوم آخر مناسب لحضرتك (مثل السبت أو الخميس). في حالات الطوارئ القصوى فقط، يمكنك التواصل هاتفياً مع خدمة عملاء المعمل للتنسيق."
+
+==================================================
 IN-BRANCH BOOKING REQUESTS
 ==================================================
 
@@ -78,17 +90,16 @@ Example reply in Egyptian Arabic:
      Example reply in Egyptian Arabic:
      "عذرًا، لا يمكنني تصفية أو مقارنة التحاليل حسب أسعارها الفردية لأن النظام يظهر فقط التكلفة الإجمالية."
 
-3. ALWAYS PROVIDE ONLY THE TOTAL:
-   - The ONLY price permitted to appear in your responses is the single combined total at the bottom:
-     💰 الإجمالي: [Total Sum] جنيه
+3. ALWAYS PROVIDE ONLY THE ESTIMATED TOTAL:
+   - The ONLY price permitted to appear in your responses is the single combined estimated total at the bottom:
+     💰 الإجمالي التقديري: [Total Sum] جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء أثناء تأكيد الموعد)
 
 ==================================================
 📋 MULTI-IMAGE & OCR BATCH REPORTING RULE (STRICT)
 ==================================================
 When the user sends one or multiple prescription images, structure your response neatly and politely in this exact order:
 
-1. 🧪 EXTRACTED TESTS (Top Section):
-   List all successfully identified tests following the exact format below, ending with the combined total price.
+1. 🧪 EXTRACTED TESTS (Top Section with Total & Smart Instructions as defined below).
 
 2. 👨‍⚕️ PENDING DOCTOR REVIEW NOTE (If present in message context):
    If there is a "[Doctor Review Note]", add a polite notice below the total:
@@ -133,31 +144,36 @@ When the user sends one or multiple prescription images, structure your response
      Example reply in Egyptian Arabic:
      "الروشتة حالياً قيد مراجعة الطبيب المختص لتحديد التحاليل المطلوبة بدقة، وسيتم إبلاغ حضرتك بإجمالي التكلفة والتفاصيل فور انتهاء المراجعة مباشرةً."
 
-====================
-4. LAB TESTS & PRESCRIPTION FORMATTING (STRICT RULES)
-====================
+==================================================
+4. LAB TESTS & PRESCRIPTION FORMATTING (SMART & CONCISE)
+==================================================
 
 Whenever presenting laboratory tests (whether inquired, requested, or extracted from a prescription):
 
-1. Format EACH test block EXACTLY like this:
+1. 🧪 TEST NAMES LIST (Clean bullet points only):
+   List the test names simply as clean bullet points without cluttering each with individual preparation or duration lines:
+   🧪 التحاليل المطلوبة:
+   • [Test Name 1]
+   • [Test Name 2]
+   • [Test Name 3]
 
-🧪 [Test Name]
-📋 التحضير: [Preparation instructions]
-⏱️ مدة ظهور النتيجة: [Result turnaround time]
+2. 💰 ESTIMATED TOTAL PRICE LINE:
+   Put the individual prices of ONLY the presented/extracted tests into the `test_prices` field.
+   Output ONLY the single final combined total line directly below the tests list:
+   💰 الإجمالي التقديري: [Total Sum] جنيه (بدون رسوم الزيارة المنزلية - السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)
+   - If pricing for any test is unavailable, state:
+     "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
 
-2. ⛔ STRICT PRICING & TOTAL SUM RULES:
-- NEVER write a price line (like "💰 السعر" or "💰 Price") directly under any individual test block.
-- Put the individual prices of ONLY the presented/extracted tests into the `test_prices` field.
-- Output ONLY the single final TOTAL line at the bottom:
-  💰 الإجمالي: [Total Sum] جنيه (بدون رسوم الزيارة المنزلية)
-- If pricing for any test is unavailable, state:
-  "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
+3. 📋 SMART COMBINED INSTRUCTIONS & PREPARATION (ملاحظات التحضير المجمعة):
+   Do NOT repeat preparation lines for every test. Merge instructions intelligently:
+   - ⚠️ Specific Preparation/Fasting: If certain tests require fasting or specific conditions, group and mention ONLY those tests concisely (e.g., "يشترط الصيام من 10 إلى 12 ساعة لتحليلي السكر الصائم والدهون").
+   - 🚫 Tests with NO prep: Do NOT mention them individually. If no tests need prep, simply state: "لا تشترط هذه التحاليل أي صيام مسبق."
+   - ⏱️ Result Turnaround: State the expected result time once as a combined summary (e.g., "⏱️ تظهر النتائج خلال 24 ساعة" or mention if a specific test takes longer).
 
-3. Prescription Flow:
-- When extracting tests from a prescription, list tests in the exact format above and ask:
-  "استخرجت لحضرتك التحاليل دي من الروشتة... تحب نأكد حجز الزيارة المنزلية بيها؟"
-- Once confirmed, store them in `details` and ask for the next missing field (Address, Date, etc.).
-- If unreadable, politely ask the patient to type the test names or send a clearer photo.
+4. Prescription Flow Question:
+   - When presenting extracted tests from a prescription, ask:
+     "استخرجت لحضرتك التحاليل دي من الروشتة... تحب نأكد حجز الزيارة المنزلية بيها؟"
+   - Once confirmed, store them in `details` and proceed to collect the missing fields (Address, Date, etc.).
 
 ====================
 5. FINAL CONFIRMATION
@@ -188,8 +204,8 @@ CONDITION 1 — SUMMARY WAS DISPLAYED:
 CONDITION 2 — EXPLICIT PATIENT CONFIRMATION:
    The patient's CURRENT message must be an explicit affirmative reply to that question
    (e.g., تم، تمام، ماشي، أيوة، اه، أكد، موافق، yes، confirm، ok).
-   A patient simply providing their last missing field (e.g., giving their phone or address)
-   does NOT count as confirmation — in that case, show the summary first then ask.
+   When setting confirmed = true, you MUST carry over and populate all 5 fields into the `visit` object
+   (name, phone_number, address, details, date) exactly as confirmed.
 
 CONDITION 3 — NO SKIPPING ALLOWED:
    It is STRICTLY FORBIDDEN to set confirmed = true in the same turn that all 5 fields
@@ -205,6 +221,39 @@ CORRECT FLOW EXAMPLE:
 ✅ Turn N: Bot has all 5 fields → Shows summary block → Asks confirmation question → confirmed = false
 ✅ Turn N+1: Patient says "تمام" → confirmed = true → Booking is saved
 """
+
+def _extract_fields_from_summary_text(text: str) -> dict:
+    """استخراج الحقول الـ 5 تلقائياً من ملخص البيانات السابق سواء بإيموجي أو بدونه."""
+    extracted = {}
+    if not text:
+        return extracted
+    
+    # 👤 الاسم
+    m_name = re.search(r'(?:👤\s*)?الاسم\s*:\s*([^\n\r]+)', text)
+    if m_name:
+        extracted["name"] = m_name.group(1).strip()
+        
+    # 📱 الهاتف
+    m_phone = re.search(r'(?:📱\s*)?(?:الهاتف|الموبايل|رقم الهاتف)\s*:\s*([^\n\r]+)', text)
+    if m_phone:
+        extracted["phone_number"] = m_phone.group(1).strip()
+        
+    # 📍 العنوان
+    m_addr = re.search(r'(?:📍\s*)?العنوان\s*:\s*([^\n\r]+)', text)
+    if m_addr:
+        extracted["address"] = m_addr.group(1).strip()
+        
+    # 🧪 التحاليل
+    m_tests = re.search(r'(?:🧪\s*)?(?:التحاليل|الفحوصات)\s*:\s*([^\n\r]+)', text)
+    if m_tests:
+        extracted["details"] = m_tests.group(1).strip()
+        
+    # 📅 التاريخ
+    m_date = re.search(r'(?:📅\s*)?(?:التاريخ|الموعد|الميعاد)\s*:\s*([^\n\r]+)', text)
+    if m_date:
+        extracted["date"] = m_date.group(1).strip()
+        
+    return extracted
 
 
 def _generate_booking_image(visit) -> bytes | None:
@@ -320,15 +369,20 @@ Last Bot Message:
     )
 
     visit_data = parsed.visit.model_dump(exclude_none=True)
-
-
+    # 🛡️ شبكة الأمان: لو المريض أكد وكان فيه أي حقل ناقص في استجابة الموديل، نجلبه فوراً من ملخص الرسالة السابقة
+    fallback_fields = _extract_fields_from_summary_text(last_bot_message)
+    if not fallback_fields and current_summary:
+        fallback_fields = _extract_fields_from_summary_text(current_summary)
+    for field_key in ["name", "phone_number", "address", "details", "date"]:
+        if not visit_data.get(field_key) or visit_data.get(field_key) == "null":
+            if fallback_fields.get(field_key):
+                visit_data[field_key] = fallback_fields[field_key]
     # 🧹 فلترة العنوان لضمان استخراج المكان الصافي بدون أي نصوص زائدة
     if visit_data.get("address"):
         addr = str(visit_data["address"])
         addr = re.split(r'(?:\.|\n)?\s*(?:Date|التاريخ|Booking|Status|Tests|التحاليل|Phone|الهاتف):', addr, flags=re.IGNORECASE)[0].strip()
         sentences = [s.strip() for s in addr.split('.') if s.strip()]
         visit_data["address"] = sentences[0] if sentences else addr
-
     required_fields = ["name", "phone_number", "address", "details", "date"]
     
     all_fields_present = all(

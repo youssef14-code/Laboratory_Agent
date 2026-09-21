@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}سجل محادثة العميل{% endblock %}
+{% block topbar_title %}سجل المحادثة{% endblock %}
+{% block topbar_sub %}{{ client.sender_id }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('list_clients', platform_id=page.platform_id, page_id=page.page_id) }}" class="btn btn-ghost">رجوع للعملاء</a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    max-height: 650px;
+    overflow-y: auto;
+    background: #fafafa;
+    border-radius: 12px;
+  }
+  .chat-bubble {
+    max-width: 75%;
+    padding: 1rem 1.25rem;
+    border-radius: 14px;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    position: relative;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .chat-user {
+    align-self: flex-start;
+    background: #e8f0fe;
+    color: #1a73e8;
+    border-bottom-left-radius: 4px;
+    border: 1px solid #d2e3fc;
+  }
+  .chat-bot {
+    align-self: flex-end;
+    background: #ffffff;
+    color: #202124;
+    border-bottom-right-radius: 4px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .chat-sender-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .chat-time {
+    font-size: 0.75rem;
+    color: #70757a;
+    font-weight: normal;
+  }
+  .client-summary-box {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    padding: 1rem 1.25rem;
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: #5d4037;
+  }
+</style>
+
+<!-- ملخص العميل الحالي -->
+{% if client.summary %}
+<div class="client-summary-box">
+  <strong>🧠 ملخص المحادثة التراكمي (AI Summary):</strong><br>
+  {{ client.summary }}
+</div>
+{% endif %}
+
+<!-- صندوق سجل الشات -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">الرسائل المتبادلة ({{ history|length }} تبادل)</span>
+  </div>
+  
+  <div class="chat-container">
+    {% for msg in history %}
+      <!-- رسالة العميل -->
+      <div class="chat-bubble chat-user">
+        <div class="chat-sender-name">
+          <span>👤 العميل</span>
+          <span class="chat-time">{{ msg.created_at.strftime('%Y-%m-%d %I:%M %p') if msg.created_at else '' }}</span>
+        </div>
+        <div>{{ msg.user_message }}</div>
+      </div>
+
+      <!-- رد البوت -->
+      <div class="chat-bubble chat-bot">
+        <div class="chat-sender-name">
+          <span>🤖 المساعد الذكي</span>
+          <span class="chat-time">{{ msg.created_at.strftime('%Y-%m-%d %I:%M %p') if msg.created_at else '' }}</span>
+        </div>
+        <div>{{ msg.bot_reply }}</div>
+      </div>
+    {% else %}
+      <div style="text-align:center; padding: 3rem; color: #888;">
+        لا توجد رسائل محفوظة في سجل هذا العميل حتى الآن.
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

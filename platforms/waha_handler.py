@@ -90,6 +90,7 @@ class WahaHandler(BaseHandler):
                 "data":     base64.b64encode(file_bytes).decode("utf-8"),
             },
         }
+        logger.info("[WAHA IMG] to=%s size=%d magic=%r", recipient_id, len(file_bytes), file_bytes[:8])
         return self._post_json(f"{self.base_url}/api/sendImage", payload)
 
     # ── file (generic document attachment) ──────────────────────────────────

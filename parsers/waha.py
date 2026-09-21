@@ -36,7 +36,26 @@ def _is_ad_referral(payload: dict) -> bool:
     )
 
 
+def _debug_print_payload(payload: dict):
+    """طباعة الـ Payload بشكل منسق في التيرمنال لتفقد الحقول بدقة"""
+    try:
+        # عمل نسخة خفيفة لإخفاء الـ Base64 الطويل فقط لتسهيل القراءة
+        clean = json.loads(json.dumps(payload, default=str))
+        if "media" in clean and isinstance(clean["media"], dict):
+            if "data" in clean["media"]:
+                clean["media"]["data"] = "<BASE64_IMAGE_DATA_TRUNCATED>"
+        if "body" in clean and str(clean["body"]).startswith(("/9j/", "data:image", "JVBERi0")):
+            clean["body"] = "<BASE64_BODY_TRUNCATED>"
+        print("\n" + "🔍" * 3 + " ================= WAHA INCOMING PAYLOAD =================" + "🔍" * 3)
+        print(json.dumps(clean, indent=2, ensure_ascii=False))
+        print("=" * 75 + "\n", flush=True)
+    except Exception as e:
+        print(f"[DEBUG PRINT ERROR] {e}")
+
 def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str = "WhatsApp") -> IncomingMessage | None:
+    # 🖨️ طباعة الـ Payload فور وصوله
+    _debug_print_payload(payload)
+    
     try:
         if not isinstance(payload, dict):
             return None

@@ -85,7 +85,6 @@ Before extracting the details of each test, you MUST count the TOTAL number of t
 
 - Include unreadable or ambiguous tests in your count.
 - Output this total exact number as "total_tests_detected".
-- This is the initial count before parent–child consolidation.
 - Recalculate "total_tests_detected" after applying STEP 5.
 
 ====================
@@ -192,61 +191,6 @@ patient-specific medical document at all. false for "lab_prescription",
 "medical_report", or "radiology_request".
 
 ====================
-STEP 5: PARENT–CHILD TEST CONSOLIDATION
-====================
-Apply this step only AFTER determining which tests are genuinely requested
-according to STEP 2 and STEP 3.
-
-A test is considered requested only when:
-- Its checkbox has a CLEAR_MARK, or
-- Its name is directly written as free text.
-
-A printed test name beside an EMPTY, AMBIGUOUS, or LOW_VISIBILITY checkbox
-must NOT activate a parent–child rule.
-
-Some laboratory tests have predefined parent–child relationships.
-
-Rules:
-- If both a parent test and one or more of its child tests are genuinely
-  requested, include ONLY the parent test in the final "labs" array.
-- Remove the child tests from the final "labs" array.
-- If only a child test is genuinely requested and its parent is not
-  genuinely requested, include the child test normally.
-- Never add, infer, or substitute a parent test that is not genuinely
-  requested in the image.
-- Use ONLY the parent–child mappings explicitly provided below.
-- The returned parent item must preserve its own "matched_text", "source",
-  and "confidence". Do not copy these values from the removed child.
-- Parent–child filtering applies only to the final "labs" array.
-- "raw_transcription" may still contain both names exactly as visible
-  in the image.
-- After applying this consolidation, count the parent and its removed
-  children as ONE requested test in "total_tests_detected".
-
-Provided mapping:
-- Parent: Urine Culture & Sensitivity
-- Child: Complete Urine Analysis
-
-Example:
-
-Genuinely requested tests:
-- Complete Urine Analysis
-- Urine Culture & Sensitivity
-
-Correct final output:
-{
-  "total_tests_detected": 1,
-  "labs": [
-    {
-      "standardized_name": "Urine Culture & Sensitivity",
-      "matched_text": "Urine culture & sensitivity",
-      "confidence": 98,
-      "source": "written_text"
-    }
-  ]
-}
-
-====================
 STEP 6: JSON OUTPUT STRUCTURE
 ====================
 Return ONLY valid JSON.
@@ -269,6 +213,16 @@ Return ONLY valid JSON.
     ],
     "notes": "..."
 }
+
+====================
+FINAL VERIFICATION STEP (MANDATORY BEFORE OUTPUT)
+====================
+Before producing the final JSON, do a line-by-line verification pass across the image:
+1. Re-read every visible line from top to bottom.
+2. Confirm that EVERY medical term or test written by the doctor is included in either "labs" or "unknown_items".
+3. Do not omit or skip any test written on the paper.
+4. If you see any abbreviated test (e.g., TSH, Ca, CBC, Vit D, Ferritin, SGOT, SGPT, FBS, HbA1c), ensure it is NOT skipped.
+
 """
 def analyze_prescription(image_path: str) -> dict:
     """
@@ -346,6 +300,7 @@ def analyze_prescription(image_path: str) -> dict:
             contents=[img, _PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
+                temperature=0,
                 thinking_config=types.ThinkingConfig(
                     thinking_level="minimal",
                 ),

@@ -1,5 +1,6 @@
-services:
+version: '3.8'
 
+services:
   db:
     image: mysql:8.0
     container_name: safot_shaker-db
@@ -19,7 +20,20 @@ services:
     networks:
       - internal
 
-
+  redis:
+    image: redis:7-alpine
+    container_name: safwat_shaker-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
 
   web:
     build: .
@@ -36,20 +50,45 @@ services:
     environment:
       - SQLALCHEMY_DATABASE_URI=${MAIN_DATABASE_URL}
       - WAHA_API_KEY=${WAHA_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       waha1:
         condition: service_started
       waha2:
         condition: service_started
-            
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4500/health"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 20s
+    networks:
+      - internal
+
+  redis_worker:
+    build: .
+    container_name: safwat_shaker-redis-worker
+    restart: always
+    command: ["python", "-m", "service.redis_worker"]
+    volumes:
+      - ./instance:/app/instance
+      - ./static/uploads:/app/static/uploads
+      - ./faiss_index:/app/faiss_index
+    env_file:
+      - .env
+    environment:
+      - SQLALCHEMY_DATABASE_URI=${MAIN_DATABASE_URL}
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - internal
 
@@ -72,11 +111,13 @@ services:
       - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
       - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
       - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
-      - WAHA_BASE_URL=http://waha1:3000    
+      - WAHA_BASE_URL=http://waha1:3000
     volumes:
       - ./waha_sessions1:/app/.sessions
+      - ./Utils.patched.js:/app/node_modules/whatsapp-web.js/src/util/Injected/Utils.js:ro
     networks:
       - internal
+
   waha2:
     image: devlikeapro/waha
     container_name: safot_shaker-waha2
@@ -96,11 +137,12 @@ services:
       - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
       - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
       - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
-      - WAHA_BASE_URL=http://waha2:3000    
+      - WAHA_BASE_URL=http://waha2:3000
     volumes:
       - ./waha_sessions2:/app/.sessions
+      - ./Utils.patched.js:/app/node_modules/whatsapp-web.js/src/util/Injected/Utils.js:ro
     networks:
-      - internal 
+      - internal
 
 networks:
   internal:
@@ -108,3 +150,4 @@ networks:
 
 volumes:
   mysqldata:
+  redisdata:

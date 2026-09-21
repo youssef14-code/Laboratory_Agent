@@ -27,4 +27,4 @@ python-bidi
 pymysql
 google-genai
 google-generativeai
-
+redis>=5.0.0

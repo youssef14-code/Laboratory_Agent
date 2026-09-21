@@ -68,12 +68,15 @@ def get_source_label(platform_name=None, platform_id=None, page_id=None) -> str:
     """إرجاع اسم وعنوان الفرع ديناميكياً من قاعدة البيانات."""
     p_name = str(platform_name or "").lower()
     pid_str = str(page_id or "").strip()
+
     if p_name == "whatsapp" or platform_id == 2 or str(platform_id) == "2":
         try:
             # جلب كل الفروع المسجلة في الداشبورد بالترتيب
             branches = Branch.query.order_by(Branch.id.asc()).all()
+            
             # 🏢 تحديد هل هو الفرع الأول أم الثاني:
             is_branch_1 = "222497324699829" in pid_str or pid_str == os.environ.get("WAHA1_PAGE_ID", "")
+
             if is_branch_1 and len(branches) >= 1:
                 return f"واتساب ({branches[0].address})"
             elif not is_branch_1 and len(branches) >= 2:
@@ -82,12 +85,15 @@ def get_source_label(platform_name=None, platform_id=None, page_id=None) -> str:
                 return f"واتساب ({branches[0].address})"
         except Exception as e:
             print(f"[get_source_label] Error fetching branch: {e}")
+
         # احتياطي إذا تعذر جلب الفروع من الداتابيز
         if "222497324699829" in pid_str:
             return "واتساب - فرع فيكتوريا (30 شارع الجلاء)"
         return "واتساب - فرع باكوس (86 شارع الفتح - ترام باكوس)"
+
     if p_name == "facebook" or platform_id == 1 or str(platform_id) == "1":
         return "فيسبوك"
+
     return str(platform_name or "أخرى")
 
 def get_platform_name(platform_id) -> str:

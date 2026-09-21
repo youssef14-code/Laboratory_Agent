@@ -16,6 +16,7 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(50), nullable=False)
+    role = db.Column(db.enum("admin", "receptionist",  name="user_roles"), default="user", nullable=False)
 
 class Laboratory(db.Model):
     __tablename__ = "laboratory"
@@ -130,7 +131,7 @@ class Client(db.Model):
 
 class ChatHistory(db.Model):
     __tablename__ = "chat_history"
-    MAX_HISTORY = 10  # الحد الأقصى للرسائل المحتفظ بها لكل عميل
+     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     platform_id = db.Column(db.Integer, nullable=False)
     page_id = db.Column(db.String(255), nullable=False)

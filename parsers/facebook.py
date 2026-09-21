@@ -39,12 +39,37 @@ def parse_facebook_message(
 
         text = msg.get("text")
         attachments = msg.get("attachments")
+        sticker_id = msg.get("sticker_id")
         
-        # 🖼️ 1. إذا كان هناك مرفقات (صور متعددة)
+        # 🖼️ 1. إذا كان هناك مرفقات (صور متعددة أو ستيكرات)
         if attachments:
             parsed_list = []
             for att in attachments:
                 att_type = att.get("type", "image")
+                payload = att.get("payload", {}) or {}
+
+                # 🛡️ فحص إذا كان المرفق عبارة عن لايك (إبهام أزرق) أو ستيكر
+                is_sticker = (
+                    bool(sticker_id)
+                    or att_type == "sticker"
+                    or (isinstance(payload, dict) and bool(payload.get("sticker_id")))
+                )
+
+                if is_sticker:
+                    # تحويله فوراً لرسالة نصية 👍 حتى لا يدخل على الـ OCR
+                    parsed_list.append(
+                        IncomingMessage(
+                            sender_id=sender_id,
+                            page_id=page_id,
+                            platform_id=platform_id,
+                            platform_name=platform_name,
+                            msg_type="text",
+                            text=text or "👍",
+                        )
+                    )
+                    continue
+
+                # صور عادية (روشتات طبية)
                 parsed_list.append(
                     IncomingMessage(
                         sender_id=sender_id,
@@ -53,12 +78,25 @@ def parse_facebook_message(
                         platform_name=platform_name,
                         msg_type=att_type,
                         text=text,
-                        media=att.get("payload"),
+                        media=payload,
                     )
                 )
             return parsed_list
 
-        # 📝 2. إذا كانت رسالة نصية فقط بدون مرفقات
+        # 🛡️ 2. إذا كان ستيكر / لايك مباشر بدون attachments
+        if sticker_id:
+            return [
+                IncomingMessage(
+                    sender_id=sender_id,
+                    page_id=page_id,
+                    platform_id=platform_id,
+                    platform_name=platform_name,
+                    msg_type="text",
+                    text=text or "👍",
+                )
+            ]
+
+        # 📝 3. إذا كانت رسالة نصية فقط بدون مرفقات
         if text:
             return [
                 IncomingMessage(

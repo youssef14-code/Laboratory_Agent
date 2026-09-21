@@ -22,4 +22,4 @@ USER appuser
 
 EXPOSE 4500
 
-CMD ["sh", "-c", "exec gunicorn -w 1 --threads 8 --timeout 120 -b 0.0.0.0:4500 --access-logfile - --error-logfile - app:app"]
+CMD ["sh", "-c", "exec gunicorn -w 3 --threads 8 --timeout 120 -b 0.0.0.0:4500 --log-level info --access-logfile - --error-logfile - app:app"]
