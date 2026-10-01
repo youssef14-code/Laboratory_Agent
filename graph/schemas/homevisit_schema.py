@@ -7,7 +7,7 @@ class HomevisitData(BaseModel):
         None, description="ONLY the patient full name."
     )
     phone_number: Optional[str] = Field(
-        None, description="ONLY the contact phone number digits."
+        None, description="ONLY the exact phone digits typed by the user verbatim. NEVER autocomplete, guess, or prepend prefixes like '010' or '011'."
     )
     details: Optional[str] = Field(
         None, description="ONLY the requested lab test names (e.g. CBC, Lipid Profile)."
@@ -16,7 +16,7 @@ class HomevisitData(BaseModel):
         None, description="ONLY the visit appointment date (YYYY-MM-DD or as stated)."
     )
     address: Optional[str] = Field(
-        None, description="Patient address as stated by the user. Accept whatever is provided without asking for more details."
+        None, description="Concise physical address only (never repeat phrases)."
     )
 
 
@@ -41,5 +41,5 @@ class HomevisitResponse(BaseModel):
     )
     confirmed: bool = Field(
         default=False,
-        description="True if the patient confirmed/agreed (e.g., تم، تمام، ماشي، أيوة، اه، أكد، موافق، yes, confirm, ok)."
+        description="CRITICAL: Set to TRUE if the patient agrees to or confirms the booking summary. Set to FALSE only if details are still being collected or patient changes their mind."
     )

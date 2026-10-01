@@ -16,7 +16,10 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(50), nullable=False)
-    role = db.Column(db.enum("admin", "receptionist",  name="user_roles"), default="user", nullable=False)
+    role = db.Column(db.Enum("admin", "user", name="user_roles"), default="user", nullable=False)
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
 
 class Laboratory(db.Model):
     __tablename__ = "laboratory"
@@ -85,7 +88,7 @@ class Inquiry(db.Model):
     status = db.Column(db.Enum(Status), default=Status.PENDING)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     comes_from = db.Column(db.String(100))
-    phone_number       = db.Column(db.String(20))
+    phone_number = db.Column(db.String(100))  # 👈 تم التعديل إلى 100 حرف
     ocr_extracted_text = db.Column(db.Text)
     confidence_score   = db.Column(db.Float)
     services_mentioned = db.Column(db.String(500))
@@ -156,7 +159,7 @@ class ChatHistory(db.Model):
 class Complaint(db.Model):
     __tablename__ = 'complaints'
     id = db.Column(db.Integer, primary_key=True)
-    phone_number = db.Column(db.String(20), nullable=False)
+    phone_number = db.Column(db.String(100), nullable=False)  # 👈 تم التعديل إلى 100 حرف
     complaint_text = db.Column(db.Text, nullable=False)
     status = db.Column(db.Enum(Status), default=Status.PENDING)  
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

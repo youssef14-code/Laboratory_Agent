@@ -34,6 +34,7 @@ def enqueue_message(
     text: str | None = None,
     media: dict | None = None,
     received_at: float | None = None,
+    sender_name: str | None = None,   # 👈 1. أضف هنا
 ) -> None:
     conversation_key = _conversation_key(platform_id, page_id, sender_id)
     queue_key = _queue_key(conversation_key)
@@ -46,9 +47,10 @@ def enqueue_message(
         "msg_type": msg_type,
         "text": text,
         "media": media,
+        "sender_name": sender_name,   # 👈 2. أضف هنا
         "received_at": received_at if received_at is not None else time.time(),
     }
-
+    print(f"👉 [ENQUEUE REDIS] sender_name={sender_name}")
     due_at = time.time() + DEBOUNCE_SECONDS
 
     pipe = r.pipeline(transaction=True)

@@ -134,11 +134,19 @@ RECENT CHAT HISTORY (Last Exchanges)
     if parsed.ready_to_save and parsed.confirmed and all_fields_present:
 
         try:
-
+            sender_identity = state.get("sender_identity") or state.get("sender_id") or ""
+            source_label = get_source_label(state.get("platform_name"), platform_id, page_id)
+            if sender_identity:
+                source_label = f"{source_label} - [{sender_identity}]"
+            # 📱 رقم الهاتف الصافي (الذي كتبه العميل أو رقم واتساب لو لم يكتب)
+            user_phone = str(complaint_data.get("phone") or "").strip()
+            if not user_phone or user_phone.lower() in ["none", "null", ""]:
+                user_phone = str(sender_identity)
             result = save_complaint_tool.invoke(
                 input={
-                    **complaint_data,
-                    "comes_from": get_source_label(state.get("platform_name"), platform_id, page_id),
+                    "phone": user_phone,  # 👈 رقم الهاتف النظيف فقط: 01114387382
+                    "complaint_text": complaint_data["complaint_text"],
+                    "comes_from": source_label,  # 👈 المصدر مع هوية الحساب: فيسبوك - [اسم العميل]
                 }
             )
 

@@ -1,9 +1,34 @@
+import json
 import logging
 import traceback
 
 from service.message_processor import IncomingMessage
 
 logger = logging.getLogger(__name__)
+
+
+# استخراج اسم العميل من الـ Payload بأمان تام:
+def _extract_sender_name(payload: dict) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    
+    # 1. فحص من داخل _data
+    raw_data = payload.get("_data", {})
+    if isinstance(raw_data, str):
+        try:
+            raw_data = json.loads(raw_data)
+        except Exception:
+            raw_data = {}
+    elif not isinstance(raw_data, dict):
+        raw_data = {}
+    name = (
+        raw_data.get("notifyName")
+        or raw_data.get("pushName")
+        or payload.get("notifyName")
+        or payload.get("pushName")
+        or payload.get("name")
+    )
+    return str(name).strip() if name else None
 
 # أنواع الرسائل اللي مش هنرد عليها (ريأكشنز، حذف رسالة، إلخ)
 IGNORED_MSG_TYPES = {"e2e_notification", "notification_template", "revoked", "reaction"}
@@ -89,6 +114,11 @@ def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str =
         media     = payload.get("media")
         msg_body  = payload.get("body")
 
+        # استخراج اسم بروفايل العميل من واتساب
+        raw_data = payload.get("_data", {}) or {}
+        sender_name = raw_data.get("notifyName") or payload.get("notifyName") or payload.get("pushName")
+        sender_name = _extract_sender_name(payload)
+        logger.info("[WAHA PARSER] Extracted sender_id=%s | sender_name=%s", sender_id, sender_name)
         # ── ميديا (صور، فيديو، صوت، ملفات) ──────────────────────────────────
         if has_media and media:
             mimetype = media.get("mimetype", "")
@@ -125,6 +155,7 @@ def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str =
                 msg_type=msg_type,
                 text=caption,  # 👈 حفظ التعليق أو "صورة مرفقة" بدلاً من الـ Base64
                 media=media,
+                sender_name=sender_name, # 👈 إضافة اسم العميل
             )
 
         # ── نص عادي ──────────────────────────────────────────────────────────
@@ -136,6 +167,7 @@ def parse_waha_message(payload: dict, page_id, platform_id, platform_name: str =
                 platform_name=platform_name,
                 msg_type="text",
                 text=msg_body,
+                sender_name=sender_name,   # 👈 إضافة اسم العميل
             )
 
         return None

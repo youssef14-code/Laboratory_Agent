@@ -228,6 +228,7 @@ def process_conversation(r: redis.Redis, conversation_key: str, owner_token: str
                     msg_type=entry.get("msg_type"),
                     text=entry.get("text"),
                     media=entry.get("media"),
+                    sender_name=entry.get("sender_name"),  # 👈 أضف هنا
                 )
                 last_message_obj = msg_obj
                 if entry.get("text"):

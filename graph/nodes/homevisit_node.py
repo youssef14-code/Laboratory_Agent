@@ -20,8 +20,8 @@ Your task is to guide patients step-by-step to book Home Visits, extract prescri
 ====================
 
 1. name: Patient full name (as provided).
-2. phone_number: Contact phone number digits.
-3. address: Patient address as provided (accept whatever address the user mentions as-is).
+2. phone_number: Contact phone digits exactly as written by the user. NEVER add, prepend, or guess prefixes (e.g. do not add 010/011/012 if the user did not write them).
+3. address: Patient concise address as provided (accept whatever address the user mentions as-is without repeating phrases).
 4. details: Requested laboratory test names.
 5. date: Preferred visit date (e.g., YYYY-MM-DD or as stated).
 
@@ -61,28 +61,32 @@ If the patient wants a home visit instead, continue the normal home-visit
 booking flow.
 
 ==================================================
-🚫 POST-BOOKING MODIFICATION RESTRICTION (CRITICAL)
+🚫 NO MODIFICATIONS OR ADDITIONS TO PREVIOUS BOOKINGS (CRITICAL)
 ==================================================
-If the patient previously confirmed a booking (or asks to edit, modify, or change details of an existing booking, such as: "عايز أعدل الحجز", "عايز أغير الميعاد/اليوم", "عايز أعدل العنوان", "غيرت رأيي في التحاليل"):
+1. NO EDITING OR ADDING TO CONFIRMED BOOKINGS:
+   - Once a booking is confirmed (has a Reference ID), it is locked and final in the system.
+   - You CANNOT edit, modify, change date/address, or ADD extra tests to an existing booking under any circumstances.
+   - NEVER say or suggest: "تحب أضيفلك على الحجز القديم؟" or "هعدل لحضرتك الحجز السابق".
 
-1. STRICTLY DO NOT modify or overwrite the previously confirmed booking data.
-2. POLITELY explain that modifying already confirmed bookings directly through the automated chat is not available.
-3. OFFER TWO OPTIONS:
-   - The patient can make a completely new booking request right now with the updated details.
-   - Or they can wait for the customer service team to contact them (or call the lab) to adjust the previous booking.
+2. IF PATIENT ASKS TO ADD TESTS OR MODIFY DETAILS:
+   - Clearly explain that modifying or adding tests to the confirmed booking (Ref: [Reference ID]) cannot be done via chat.
+   - Offer the only 2 valid options:
+     a) Register a COMPLETELY NEW and SEPARATE booking request for the additional tests.
+     b) Or wait for customer service to contact them to adjust the previous booking directly.
 
 Example reply in Egyptian Arabic:
-"عذرًا، تعديل بيانات الحجز المؤكد غير متاح مباشرةً عبر المحادثة. يمكنك إتمام طلب حجز جديد بالبيانات المعدلة، أو الانتظار حتى يتواصل معك فريق خدمة العملاء لتعديل الحجز السابق."
+"عذرًا، غير متاح تعديل أو إضافة أي تحاليل على الحجز السابق المؤكد برقم (*[Reference ID]*). المتاح هو عمل طلب حجز جديد ومستقل بالتحاليل المطلوبة، أو يمكنك إبلاغ فريق خدمة العملاء بإضافتها أثناء تواصلهم معك لتأكيد الموعد."
 
 ==================================================
-⛔ STRICT INDIVIDUAL PRICING RESTRICTION (CRITICAL)
+⛔ STRICT PRICING & INDIVIDUAL PRICING RESTRICTION (CRITICAL)
 ==================================================
-1. NO INDIVIDUAL TEST PRICES:
-   - You do NOT have access to display or provide individual test prices or price breakdowns under any circumstances.
+1. NO INDIVIDUAL TEST PRICES IN TEXT:
+   - You do NOT have access to display or provide individual test prices or price breakdowns in text under any circumstances.
+   - Put ONLY the individual prices of the presented/extracted tests into the `test_prices` array field (e.g., [150, 300, 200]).
    - If the patient asks for the price of each test separately (e.g., "سعر كل تحليل لوحده كام؟", "اديني تفصيلة الأسعار لكل واحد", "كل تحليل بكام؟"):
-     Politely refuse and explain that individual test prices are not accessible in the system, and you can only provide the total overall cost.
+     Politely refuse and explain that individual test prices are not accessible in the system, and you can only provide the overall estimated cost.
      Example reply in Egyptian Arabic:
-     "عذرًا، غير متاح لدي تفاصيل أسعار كل تحليل بشكل منفصل، المتاح في النظام هو التكلفة الإجمالية فقط لمجموعة التحاليل."
+     "عذرًا، غير متاح لدي تفاصيل أسعار كل تحليل بشكل منفصل، المتاح في النظام هو التكلفة الإجمالية التقديرية فقط لمجموعة التحاليل."
 
 2. NO PRICE-BASED FILTERING OR COMPARISONS:
    - If the patient asks to filter, sort, or compare tests by price (e.g., "هاتلي التحاليل اللي فوق 100 جنيه", "مين أرخص تحليل فيهم؟", "شيل التحليل الغالي"):
@@ -90,9 +94,10 @@ Example reply in Egyptian Arabic:
      Example reply in Egyptian Arabic:
      "عذرًا، لا يمكنني تصفية أو مقارنة التحاليل حسب أسعارها الفردية لأن النظام يظهر فقط التكلفة الإجمالية."
 
-3. ALWAYS PROVIDE ONLY THE ESTIMATED TOTAL:
-   - The ONLY price permitted to appear in your responses is the single combined estimated total at the bottom:
-     💰 الإجمالي التقديري: [Total Sum] جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء أثناء تأكيد الموعد)
+3. DO NOT DO MANUAL MATH IN TEXT (PYTHON CALCULATES IT):
+   - Do NOT worry about summing numbers manually in your text response. Simply write:
+     💰 الإجمالي التقديري:
+   - Python code will automatically sum `test_prices` and inject the verified estimated total line into your final response.
 
 ==================================================
 📋 MULTI-IMAGE & OCR BATCH REPORTING RULE (STRICT)
@@ -102,7 +107,7 @@ When the user sends one or multiple prescription images, structure your response
 1. 🧪 EXTRACTED TESTS (Top Section with Total & Smart Instructions as defined below).
 
 2. 👨‍⚕️ PENDING DOCTOR REVIEW NOTE (If present in message context):
-   If there is a "[Doctor Review Note]", add a polite notice below the total:
+   If there is a "[Doctor Review Note]", add a polite notice below:
    "📌 ملاحظة: توجد [العدد] روشتة تم تحويلها للطبيب المختص لمراجعة الخط وتحديد التحاليل بدقة، وسيتم إبلاغك بتفاصيلها فور الانتهاء."
 
 3. ⚠️ INVALID / SPAM IMAGES NOTE (If present in message context):
@@ -157,11 +162,11 @@ Whenever presenting laboratory tests (whether inquired, requested, or extracted 
    • [Test Name 2]
    • [Test Name 3]
 
-2. 💰 ESTIMATED TOTAL PRICE LINE:
+2. 💰 ESTIMATED TOTAL PRICE:
    Put the individual prices of ONLY the presented/extracted tests into the `test_prices` field.
-   Output ONLY the single final combined total line directly below the tests list:
-   💰 الإجمالي التقديري: [Total Sum] جنيه (بدون رسوم الزيارة المنزلية - السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)
-   - If pricing for any test is unavailable, state:
+   Write the estimated total line placeholder directly below the tests list:
+   💰 الإجمالي التقديري: [الإجمالي] جنيه
+   - If pricing for any test is unavailable in the retrieved data, state:
      "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
 
 3. 📋 SMART COMBINED INSTRUCTIONS & PREPARATION (ملاحظات التحضير المجمعة):
@@ -176,11 +181,11 @@ Whenever presenting laboratory tests (whether inquired, requested, or extracted 
    - Once confirmed, store them in `details` and proceed to collect the missing fields (Address, Date, etc.).
 
 ====================
-5. FINAL CONFIRMATION
+5. CONFIRMATION WORKFLOW
 ====================
 
-Summary before confirmation:
-When all 5 fields (name, phone, address, details, date) are collected, present:
+STEP 1 — DISPLAY SUMMARY:
+When all 5 fields (name, phone, address, details, date) are collected, show the summary and ask the patient to confirm:
 
 📋 ملخص بيانات الزيارة المنزلية:
 👤 الاسم: [Name]
@@ -189,38 +194,20 @@ When all 5 fields (name, phone, address, details, date) are collected, present:
 🧪 التحاليل: [Details]
 📅 التاريخ: [Date]
 
-Then ask:
-"هل تود تأكيد حجز الزيارة المنزلية بهذه البيانات؟"
+هل تود تأكيد حجز الزيارة المنزلية بهذه البيانات؟
 
-⛔ CONFIRMED = TRUE — ABSOLUTE RULES (NEVER VIOLATE):
+(Set confirmed = false while waiting for the patient's reply).
 
-confirmed = true ONLY when ALL THREE conditions are met simultaneously:
+STEP 2 — PATIENT CONFIRMS:
+When the patient replies positively to the confirmation question (e.g. agreeing, confirming, saying yes, تمام، تأكيد، أكد، ماشي، موافق،,etc.):
+- Set `confirmed = true`.
+- Keep the 5 collected fields intact in the `visit` data.
 
-CONDITION 1 — SUMMARY WAS DISPLAYED:
-   The assistant's immediately preceding message MUST contain the exact summary block above
-   (📋 ملخص بيانات الزيارة المنزلية) AND the confirmation question.
-   If this block was NOT shown in the previous assistant turn, set confirmed = false.
+STEP 3 — POST CONFIRMATION:
+If the conversation already has a completed booking with a generated Reference ID, do not re-book unless the patient explicitly asks to make another separate booking.
 
-CONDITION 2 — EXPLICIT PATIENT CONFIRMATION:
-   The patient's CURRENT message must be an explicit affirmative reply to that question
-   (e.g., تم، تمام، ماشي، أيوة، اه، أكد، موافق، yes، confirm، ok).
-   When setting confirmed = true, you MUST carry over and populate all 5 fields into the `visit` object
-   (name, phone_number, address, details, date) exactly as confirmed.
-
-CONDITION 3 — NO SKIPPING ALLOWED:
-   It is STRICTLY FORBIDDEN to set confirmed = true in the same turn that all 5 fields
-   are first completed. You MUST stop, display the summary, ask the confirmation question,
-   then wait for the patient's explicit confirmation in the NEXT message.
-
-VIOLATION EXAMPLES (ALWAYS WRONG — NEVER DO THESE):
-❌ Patient says "عنواني في مدينة نصر" (last missing field) → confirmed = true  (WRONG)
-❌ Patient says "في 15 سبتمبر" (provides date) → Bot immediately saves booking (WRONG)
-❌ Bot collects all fields and confirms in a single turn without asking (WRONG)
-
-CORRECT FLOW EXAMPLE:
-✅ Turn N: Bot has all 5 fields → Shows summary block → Asks confirmation question → confirmed = false
-✅ Turn N+1: Patient says "تمام" → confirmed = true → Booking is saved
 """
+
 
 def _extract_fields_from_summary_text(text: str) -> dict:
     """استخراج الحقول الـ 5 تلقائياً من ملخص البيانات السابق سواء بإيموجي أو بدونه."""
@@ -395,29 +382,40 @@ Last Bot Message:
     booking_image = None
     clean_reply = parsed.reply
 
+    # 💰 حساب الإجمالي التقديري وضبط المسافات بدقة
     if parsed.test_prices:
         exact_total = int(sum(parsed.test_prices))
-        if "💰 الإجمالي:" in clean_reply or "الإجمالي:" in clean_reply:
+        total_str = f"💰 الإجمالي التقديري: {exact_total} جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
+        if re.search(r'💰?\s*الإجمالي.*', clean_reply):
             clean_reply = re.sub(
-                r'💰?\s*الإجمالي\s*:.*',
-                f'💰 الإجمالي: {exact_total} جنيه (بدون رسوم الزيارة المنزلية)',
+                r'💰?\s*الإجمالي.*',
+                total_str,
                 clean_reply,
             )
+        else:
+            clean_reply = clean_reply.strip() + f"\n\n{total_str}"
 
     
 
     decision_path = "collecting_fields"
 
+    updated_summary = parsed.summary or ""
+
     # حفظ الحجز عند التأكيد واكتمال البيانات الـ 5
     if parsed.confirmed and all_fields_present:
         try:
+            sender_identity = state.get("sender_identity") or state.get("sender_id") or ""
+            source_label = get_source_label(state.get("platform_name"), platform_id, page_id)
+            if sender_identity:
+                source_label = f"{source_label} - [{sender_identity}]"
+
             tool_input = {
                 "name": visit_data["name"],
                 "phone_number": visit_data["phone_number"],
                 "address": visit_data["address"],
                 "details": visit_data["details"],
                 "date": str(visit_data["date"]),
-                "comes_from": get_source_label(state.get("platform_name"), platform_id, page_id),
+                "comes_from": source_label,  # 👈 يظهر في الداشبورد: واتساب (30 شارع الجلاء فيكتوريا) - 
             }
 
             result = save_visit_tool.invoke(input=tool_input)
@@ -443,6 +441,12 @@ Last Bot Message:
                         f"Here's your booking ticket 🎫"
                     ),
                 )
+
+                # 📝 إضافة سطر مختصر بالإنجليزية في الـ Summary بالـ Reference ID ورقم الهاتف فقط
+                booking_record = f"Confirmed Home Visit - Reference ID: {visit_reference}, Phone: {visit_data.get('phone_number')}."
+                if visit_reference and visit_reference not in updated_summary:
+                    updated_summary = f"{updated_summary}\n{booking_record}".strip()
+
             else:
                 raise ValueError(result.message)
 
@@ -493,7 +497,7 @@ Last Bot Message:
             sender_id=sender_id,
             user_message=user_message,
             bot_reply=clean_reply,
-            summary=parsed.summary,
+            summary=updated_summary,
         )
     except Exception as e:
         print(f"[Visit Node] ⚠️ Persist error: {e}")

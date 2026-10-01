@@ -49,10 +49,18 @@ When presenting laboratory tests (whether inquired, requested, or extracted from
    - 🚫 Tests with NO prep: Do NOT mention them individually. If no tests need prep, simply state: "لا تشترط هذه التحاليل أي صيام مسبق."
    - ⏱️ Result Turnaround: State the expected result time once as a combined summary (e.g., "⏱️ تظهر النتائج خلال 24 ساعة" or mention if a specific culture/hormone test takes longer).
 
-4. ⛔ STRICT PRICING RULES (NEVER VIOLATE):
-   - NEVER write individual prices for separate tests.
-   - Output ONLY the single final combined estimated total sum.
-   - If pricing for any test is unavailable, state:
+==================================================
+⛔ STRICT PRICING RULES (PYTHON HANDLES THE MATH)
+==================================================
+1. NO INDIVIDUAL PRICES IN TEXT:
+   - NEVER write individual test prices in the text reply.
+   - Put ONLY the individual prices of the presented tests into the `test_prices` array field (e.g., [150, 300, 200]).
+2. DO NOT DO MANUAL MATH IN TEXT:
+   - Simply write a placeholder for the total line or let the system inject it:
+     💰 الإجمالي التقديري: [الإجمالي] جنيه
+   - Python code will automatically calculate the exact sum from `test_prices` and inject the verified estimated total.
+3. UNAVAILABLE PRICES:
+   - If pricing for any test is unavailable in the retrieved data, state:
      "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
 
 ==================================================
@@ -166,21 +174,16 @@ CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
    - Combine the immediate flow from Chat History with the long-term facts from the Cumulative Summary.
 """
 
-
 def inquiry_node(state: AgentState) -> dict:
-
     page_id = state.get("page_id")
     sender_id = state.get("sender_id")
     platform_id = state.get("platform_id")
-
     user_message = state["user_message"]
 
     current_summary = state.get("summary") or ""
     last_bot_message = state.get("last_bot_message") or ""
     chat_history = state.get("chat_history") or ""
-
-    rag_context = state.get("rag_context", "")
-    # حساب الإجمالي مسبقاً بالبايثون وحقنه في السياق
+    rag_context = state.get("rag_context") or ""
 
     llm = get_gemini()
     structured_llm = llm.with_structured_output(
@@ -188,15 +191,19 @@ def inquiry_node(state: AgentState) -> dict:
         method="json_schema",
         include_raw=True,
     )
-    
+
     system_prompt = f"""
 {INQUIRY_SYSTEM_PROMPT}
 
 ====================
 RETRIEVED KNOWLEDGE
 ====================
-
 {rag_context or "(No relevant laboratory information was retrieved.)"}
+
+====================
+RECENT CHAT HISTORY (Last Exchanges)
+====================
+{chat_history or "(No previous chat history)"}
 
 ====================
 MEMORY
@@ -207,12 +214,6 @@ Summary:
 
 Last Bot Message:
 {last_bot_message}
-
-====================
-RECENT CHAT HISTORY (Last Exchanges)
-====================
-{chat_history or "(No previous chat history)"}
-
 """
 
     messages = [
@@ -221,22 +222,20 @@ RECENT CHAT HISTORY (Last Exchanges)
     ]
 
     try:
-
         result = structured_llm.invoke(messages)
-
         parsed: InquiryResponse = result["parsed"]
         raw_response = result["raw"]
 
+        if parsed is None:
+            raise ValueError(f"Inquiry parsing failed: {result.get('parsing_error')}")
+
     except Exception as e:
-
         print(f"[Inquiry Node] LLM error: {e}")
-
         fallback = detect_language_fallback(
             user_message,
-            arabic="عذرًا، حدث خطأ مؤقت أثناء معالجة الاستفسار.",
-            default="Sorry, a temporary error occurred.",
+            arabic="عذرًا، حدث خطأ مؤقت أثناء معالجة استفسارك. يرجى المحاولة مرة أخرى.",
+            default="Sorry, a temporary error occurred while processing your inquiry. Please try again.",
         )
-
         return {
             "response": fallback,
             "summary": current_summary,
@@ -246,7 +245,6 @@ RECENT CHAT HISTORY (Last Exchanges)
         }
 
     usage = getattr(raw_response, "usage_metadata", None)
-
     inquiry_usage = (
         {
             "input_tokens": usage.get("input_tokens", 0),
@@ -259,21 +257,20 @@ RECENT CHAT HISTORY (Last Exchanges)
 
     clean_reply = parsed.reply
 
-    # 🧮 حساب الإجمالي بالبايثون 100% بدقة واستبداله في الرد لضمان عدم وجود أي خطأ رياضي
+    # 💰 حساب الإجمالي التقديري وضبط المسافات بدقة
     if parsed.test_prices:
         exact_total = int(sum(parsed.test_prices))
-        if "💰 الإجمالي:" in clean_reply:
+        total_str = f"💰 الإجمالي التقديري: {exact_total} جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
+        if re.search(r'💰?\s*الإجمالي.*', clean_reply):
             clean_reply = re.sub(
-                r'💰\s*الإجمالي\s*:.*',
-                f'💰 الإجمالي: {exact_total} جنيه',
+                r'💰?\s*الإجمالي.*',
+                total_str,
                 clean_reply,
             )
         else:
-            clean_reply = clean_reply.strip() + f"\n\n💰 الإجمالي: {exact_total} جنيه"
-
+            clean_reply = clean_reply.strip() + f"\n\n{total_str}"
 
     try:
-
         ClientService.save_chat_exchange(
             platform_id=platform_id,
             page_id=page_id,
@@ -282,7 +279,6 @@ RECENT CHAT HISTORY (Last Exchanges)
             bot_reply=clean_reply,
             summary=parsed.summary,
         )
-
     except Exception as e:
         print(f"[Inquiry Node] Persist error: {e}")
 

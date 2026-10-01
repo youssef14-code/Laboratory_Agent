@@ -47,8 +47,14 @@
       </div>
 
       <div>
-        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">المصدر</div>
-        <div>{{ booking.comes_from or '—' }}</div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">المصدر والمنصة</div>
+        {% if 'واتساب' in (booking.comes_from or '') or 'whatsapp' in (booking.comes_from or '')|lower %}
+          <span class="pill" style="background:#e8f8ee;color:#1e7e34;font-weight:600;">🟢 {{ booking.comes_from }}</span>
+        {% elif 'فيسبوك' in (booking.comes_from or '') or 'facebook' in (booking.comes_from or '')|lower %}
+          <span class="pill" style="background:#e7f0fd;color:#1877f2;font-weight:600;">🔵 {{ booking.comes_from }}</span>
+        {% else %}
+          <div>{{ booking.comes_from or '—' }}</div>
+        {% endif %}
       </div>
 
       <div>

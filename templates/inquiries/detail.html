@@ -57,8 +57,23 @@
       <div style="padding:1.25rem;display:flex;flex-direction:column;gap:.85rem">
 
         <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <span class="text-muted">رقم الهاتف</span>
+          <span class="text-muted">رقم الهاتف / الاسم </span>
           <span style="font-weight:600;font-size:1.05rem">{{ inquiry.phone_number or '—' }}</span>
+        </div>
+        
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
+          <span class="text-muted">المنصة</span>
+          {% if 'whatsapp' in (inquiry.comes_from or '')|lower %}
+            <span class="badge" style="background:#25D366;color:#fff;padding:0.35rem 0.75rem;border-radius:6px;font-weight:600;font-size:0.85rem">
+              🟢 واتساب (WhatsApp)
+            </span>
+          {% elif 'facebook' in (inquiry.comes_from or '')|lower or 'messenger' in (inquiry.comes_from or '')|lower %}
+            <span class="badge" style="background:#0084FF;color:#fff;padding:0.35rem 0.75rem;border-radius:6px;font-weight:600;font-size:0.85rem">
+              🔵 فيسبوك (Facebook)
+            </span>
+          {% else %}
+            <span class="pill pill-reviewed">{{ inquiry.comes_from or '—' }}</span>
+          {% endif %}
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">

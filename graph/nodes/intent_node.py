@@ -45,7 +45,7 @@ complaint
 The user reports a complaint, negative experience, problem, or feedback.
 
 direct
-Greetings, thanks, small talk, working hours, lab location/branches, contact numbers, or anything unrelated to laboratory test retrieval.
+Greetings, thanks, small talk, working hours, lab location/branches, contact numbers, payment methods (طرق الدفع، فيزا، كاش، انستاباي، المحافظ الإلكترونية، فودافون كاش), or anything unrelated to specific laboratory test retrieval.
 
 labresults
 The user asks how to get/download lab results, asks if results are ready, or inquires about anything directly connected to retrieving lab results.

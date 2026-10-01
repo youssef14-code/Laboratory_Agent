@@ -2,6 +2,8 @@ from sqlalchemy import bindparam, text
 
 from knowledge.utils import main_session
 from search.schemas import SearchResult
+import logging
+logger = logging.getLogger(__name__)
 
 TABLE_NAME = "labservices"
 
@@ -64,5 +66,8 @@ def build_context(results: list[SearchResult]) -> str:
             block.append(f"Patient Instructions: {row['patient_instructions']}")
 
         sections.append("\n".join(block))
+        logger.info(f"[build_context] Built context for result ID {result.id}: {block}")
+        logger.debug(f"[build_context] Current sections: {sections}")
 
     return "\n\n" + "\n\n".join(sections)
+ 

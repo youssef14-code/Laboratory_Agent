@@ -42,13 +42,8 @@
 
   <nav class="nav-section">
 
-    <p class="nav-section-label">الرئيسية</p>
-
-    <a href="{{ url_for('dashboard') }}"
-       class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
-      <i data-lucide="layout-dashboard" class="nav-icon"></i>
-      لوحة التحكم
-    </a>
+    <!-- ── قسم العمليات اليومية (يظهر للجميع Admin + User) ── -->
+    <p class="nav-section-label">العمليات اليومية</p>
 
     <a href="{{ url_for('list_inquiries') }}"
        class="nav-item {% if request.endpoint == 'list_inquiries' %}active{% endif %}">
@@ -60,7 +55,7 @@
     </a>
 
     <a href="{{ url_for('list_bookings') }}"
-       class="nav-item {% if request.endpoint == 'list_bookings' %}active{% endif %}">
+       class="nav-item {% if request.endpoint in ['list_bookings', 'list_visits'] %}active{% endif %}">
       <i data-lucide="calendar-check" class="nav-icon"></i>
       الحجوزات
     </a>
@@ -71,42 +66,57 @@
       الشكاوى
     </a>
 
-    <p class="nav-section-label">الخدمات</p>
+    <!-- ── قسم الإدارة والتحاليل (يظهر لمدير النظام Admin فقط) ── -->
+    {% if current_user.is_authenticated and current_user.role == 'admin' %}
+      
+      <p class="nav-section-label">الإدارة والتقارير</p>
 
-    <a href="{{ url_for('list_labs') }}"
-       class="nav-item {% if request.endpoint in ['list_labs','create_lab','edit_lab'] %}active{% endif %}">
-      <i data-lucide="clipboard-list" class="nav-icon"></i>
-      التحاليل الطبية
-    </a>
+      <a href="{{ url_for('dashboard') }}"
+         class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+        <i data-lucide="layout-dashboard" class="nav-icon"></i>
+        لوحة التحكم
+      </a>
 
-    <p class="nav-section-label">الإعدادات والمستخدمين</p>
+      <p class="nav-section-label">الخدمات الطبية</p>
 
-    <a href="{{ url_for('list_laboratories') }}"
-       class="nav-item {% if request.endpoint in ['list_laboratories','create_laboratory','edit_laboratory'] %}active{% endif %}">
-      <i data-lucide="building-2" class="nav-icon"></i>
-      إدارة المعامل
-    </a>
+      <a href="{{ url_for('list_labs') }}"
+         class="nav-item {% if request.endpoint in ['list_labs','create_lab','edit_lab'] %}active{% endif %}">
+        <i data-lucide="clipboard-list" class="nav-icon"></i>
+        التحاليل الطبية
+      </a>
 
-    <a href="{{ url_for('list_platforms') }}"
-       class="nav-item {% if request.endpoint in ['list_platforms','create_platform','edit_platform'] %}active{% endif %}">
-      <i data-lucide="share-2" class="nav-icon"></i>
-      منصات التواصل
-    </a>
+      <p class="nav-section-label">الإعدادات والمستخدمين</p>
 
-    <a href="{{ url_for('users') }}"
-       class="nav-item {% if request.endpoint in ['users','create_user','edit_user'] %}active{% endif %}">
-      <i data-lucide="users" class="nav-icon"></i>
-      المستخدمون
-    </a>
+      <a href="{{ url_for('list_laboratories') }}"
+         class="nav-item {% if request.endpoint in ['list_laboratories','create_laboratory','edit_laboratory'] %}active{% endif %}">
+        <i data-lucide="building-2" class="nav-icon"></i>
+        إدارة المعامل
+      </a>
+
+      <a href="{{ url_for('list_platforms') }}"
+         class="nav-item {% if request.endpoint in ['list_platforms','create_platform','edit_platform'] %}active{% endif %}">
+        <i data-lucide="share-2" class="nav-icon"></i>
+        منصات التواصل
+      </a>
+
+      <a href="{{ url_for('users') }}"
+         class="nav-item {% if request.endpoint in ['users','create_user','edit_user'] %}active{% endif %}">
+        <i data-lucide="users" class="nav-icon"></i>
+        المستخدمون
+      </a>
+
+    {% endif %}
 
   </nav>
 
   <div class="sidebar-footer">
     <div class="sidebar-user">
-      <div class="avatar">{{ current_user.username[0]|upper if current_user.username else 'A' }}</div>
+      <div class="avatar">{{ current_user.username[0]|upper if current_user.username else 'U' }}</div>
       <div class="user-info">
-        <div class="user-name">{{ current_user.username if current_user.username else 'Admin' }}</div>
-        <div class="user-role">مدير النظام</div>
+        <div class="user-name">{{ current_user.username if current_user.username else 'User' }}</div>
+        <div class="user-role">
+          {{ 'مدير النظام' if current_user.role == 'admin' else 'موظف استقبال' }}
+        </div>
       </div>
       <a href="{{ url_for('logout') }}" class="logout-btn" title="تسجيل الخروج">
         <i data-lucide="log-out"></i>

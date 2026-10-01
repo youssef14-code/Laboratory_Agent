@@ -8,7 +8,8 @@ from graph.graph import get_agent_graph
 from graph.utils import count_request
 from ocr.processor import process_prescription_ocr
 from software_service.client_services import ClientService
-
+import logging
+logger = logging.getLogger(__name__)
 
 class IncomingMessage:
     def __init__(
@@ -20,6 +21,7 @@ class IncomingMessage:
         text=None,
         media=None,
         platform_name=None,
+        sender_name=None,     # 👈 إضافة هذا الحقل
     ):
         self.sender_id = sender_id
         self.page_id = page_id
@@ -28,6 +30,7 @@ class IncomingMessage:
         self.type = msg_type
         self.text = text
         self.media = media
+        self.sender_name = sender_name # 👈 حفظ الاسم
 
 
 # Pricing per model (USD per token)
@@ -36,7 +39,7 @@ OCR_OUTPUT_COST_PER_TOKEN = 2.5 / 1_000_000
 
 FLASH_INPUT_COST_PER_TOKEN = 0.25 / 1_000_000
 FLASH_OUTPUT_COST_PER_TOKEN = 1.5 / 1_000_000
-
+ 
 
 def _calc_total_usage(result: dict, ocr_usage: dict = None) -> dict:
     """حساب استهلاك التوكنز والتكلفة لجميع النودات."""
@@ -96,6 +99,61 @@ def _calc_total_usage(result: dict, ocr_usage: dict = None) -> dict:
         "total_cost_cents": total_cost_cents,
         "req_per_dollar": req_per_dollar,
     }
+
+
+def _get_client_identity(message: IncomingMessage, page) -> str:
+    """جلب رقم الهاتف أو اسم العميل بدقة."""
+    platform = (message.platform_name or "").lower()
+
+    # 🟢 واتساب
+    if platform == "whatsapp" or getattr(message, "platform_id", None) == 2:
+        sender = str(message.sender_id or "")
+        sender_name = getattr(message, "sender_name", None)
+
+        # 1. إذا وصل الاسم من الـ Webhook
+        if sender_name and str(sender_name).strip() and str(sender_name).strip().lower() not in ["none", "null", ""]:
+            return str(sender_name).strip()
+
+        # 2. إذا كان الرقم صريحاً
+        if "@c.us" in sender or "@s.whatsapp.net" in sender:
+            num = sender.split("@")[0]
+            if num.startswith("201") or len(num) >= 11:
+                return num
+
+        # 3. محاولة جلب الاسم مباشرة من كونتينر WAHA (waha1 أو waha)
+        for host in ["http://waha1:3000", "http://waha:3000", "http://localhost:3000"]:
+            try:
+                url = f"{host}/api/contacts/{sender}?session=default"
+                res = requests.get(url, timeout=3)
+                if res.status_code == 200:
+                    data = res.json()
+                    name = data.get("pushname") or data.get("name")
+                    if name:
+                        print(f"👉 [DIRECT WAHA FETCH SUCCESS] name={name}")
+                        return str(name).strip()
+            except Exception:
+                continue
+
+        return "واتساب"
+
+    # 🔵 فيسبوك
+    elif platform in ["facebook", "messenger"] or getattr(message, "platform_id", None) == 1:
+        try:
+            url = f"https://graph.facebook.com/v19.0/{message.sender_id}"
+            res = requests.get(
+                url,
+                params={"fields": "name,first_name,last_name", "access_token": page.token},
+                timeout=4,
+            )
+            if res.status_code == 200:
+                data = res.json()
+                name = data.get("name") or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+                if name:
+                    return f"{name}"
+        except Exception as e:
+            print(f"[Facebook Name Fetch Error]: {e}")
+
+    return getattr(message, "sender_name", None) or "عميل"
 
 
 def _consume_subscription(message: "IncomingMessage", usage: dict) -> None:
@@ -158,7 +216,13 @@ def _consume_subscription_direct(message: "IncomingMessage", count: int = 1) -> 
 
 def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, bytes | None]:
 
-    # 1. استخراج كائن العميل بأمان من الـ Tuple
+    from models.models import Page
+    page = Page.query.filter_by(
+        platform_id=message.platform_id,
+        page_id=message.page_id,
+    ).first()
+
+    # 1. استخراج كائن العميل بأمان
     client, client_msg = ClientService.get_or_create_client(
         sender_id=message.sender_id,
         page_id=message.page_id,
@@ -177,8 +241,6 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     current_summary = client.summary if (client and hasattr(client, "summary") and client.summary) else ""
     current_last_bot = client.last_bot_message if (client and hasattr(client, "last_bot_message") and client.last_bot_message) else ""
 
-    
-
     history_rows, _ = ClientService.get_chat_history(
         platform_id=message.platform_id,
         page_id=message.page_id,
@@ -187,16 +249,29 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     )
     formatted_chat_history = ClientService.format_chat_history(history_rows)
     platform_name = message.platform_name or str(message.platform_id)
+
+    # 🛡️ حماية من تمرير Base64 إلى الموديل
+    user_msg_clean = str(message.text or "").strip()
+    if user_msg_clean.startswith(("/9j/", "data:image", "JVBERi0", "iVBORw")) or len(user_msg_clean) > 3000:
+        user_msg_clean = "📷 [صورة مرفقة]"
+    summary_clean = str(current_summary or "").strip()
+    if summary_clean.startswith(("/9j/", "data:image")) or len(summary_clean) > 3000:
+        summary_clean = summary_clean[:1000]
+
+    sender_identity = _get_client_identity(message, page)
+
     # 2. تجهيز الـ State الموحدة
     state = {
         "page_id": str(message.page_id),
         "sender_id": str(message.sender_id),
+        "sender_name": getattr(message, "sender_name", None),
         "platform_id": message.platform_id,
         "platform_name": platform_name,
-        "user_message": message.text or "",
-        "summary": current_summary,
+        "user_message": user_msg_clean,
+        "summary": summary_clean,
         "last_bot_message": current_last_bot,
-        "chat_history": formatted_chat_history,  # 👈 تمرير سجل المحادثة إلى Graph State
+        "chat_history": formatted_chat_history,
+        "sender_identity": sender_identity,  # 👈 تمرير هوية المتحدث
 
         "intent": None,
         "refined_queries": [],
@@ -379,11 +454,13 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
 
         with open(image_path, "wb") as f:
             f.write(image_bytes)
+        
+        client_identifier = _get_client_identity(message, page)
 
         # 4. تشغيل OCR
         ocr_result = process_prescription_ocr(
             image_path=image_path,
-            phone_number="",
+            phone_number=client_identifier,
             comes_from=f"{message.platform_name}:{message.sender_id}:{message.page_id}",
             laboratory_id=page.laboratory_id,
         )
@@ -400,6 +477,7 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
                 f"{tests_list}\n\n"
                 "Please provide full details, preparations needed, and prices for these tests."
             )
+            logger.info("[handle_image_message] : %s", tests_list)
             result_text, ticket = run_agent(message, ocr_usage=ocr_usage)
             _consume_subscription_direct(message, count=1)  # +1 للـ OCR
             return result_text, ticket
@@ -493,7 +571,7 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
                 detailed_images_report.append(f"📄 الروشتة #{idx}: ❌ تعذر تحميل الصورة.")
                 continue
 
-            # حفظ الصورة
+            # حفظ الصورةOCR successful. Extracted tests
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             uploads_dir = os.path.join(project_dir, "static", "uploads")
             os.makedirs(uploads_dir, exist_ok=True)
@@ -501,11 +579,13 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
 
             with open(image_path, "wb") as f:
                 f.write(image_bytes)
-
+  
+            client_identifier = _get_client_identity(msg, page)
+             
             # تشغيل OCR
             ocr_result = process_prescription_ocr(
                 image_path=image_path,
-                phone_number="",
+                phone_number=client_identifier,
                 comes_from=f"{msg.platform_name}:{msg.sender_id}:{msg.page_id}",
                 laboratory_id=page.laboratory_id,
             )

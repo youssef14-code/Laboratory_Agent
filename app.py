@@ -152,6 +152,17 @@ def inject_globals():
     return dict(pending_inquiries_count=pending_count)
 
 
+from functools import wraps
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or getattr(current_user, 'role', '') != 'admin':
+            flash('عذرًا، هذه العملية مخصصة لمدير النظام (Admin) فقط.', 'error')
+            return redirect(url_for('list_bookings'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Auth routes
 # ══════════════════════════════════════════════════════════════════════════
@@ -194,6 +205,10 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # 👈 لو مش أدمن نوجهه لصفحة الحجوزات فوراً
+    if current_user.role != 'admin':
+        return redirect(url_for('list_bookings'))
+
 
     laboratory = Laboratory.query.first()
 
@@ -806,6 +821,7 @@ def update_booking_status(booking_id):
 # delete a booking
 @app.route('/bookings/<int:booking_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_booking(booking_id):
     deleted, msg = HomeVisitService.delete_visit(booking_id)
     flash(msg, 'success' if deleted else 'error')
@@ -977,6 +993,7 @@ def confirm_inquiry(inquiry_id):
 # delete an inquiry
 @app.route('/inquiries/<int:inquiry_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_inquiry(inquiry_id):
     inquiry, message = InquiryService.delete_inquiry(inquiry_id)
     flash(message, 'success' if inquiry else 'error')
@@ -1041,6 +1058,7 @@ def update_complaint_status(complaint_id):
 # delete a complaint
 @app.route('/complaints/<int:complaint_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_complaint(complaint_id):
     complaint, message = ComplaintService.delete_complaint(complaint_id)
     flash(message, 'success' if complaint else 'error')
@@ -1440,6 +1458,7 @@ def fb_webhook():
                                 msg_type=msg.type,
                                 text=msg.text,
                                 media=msg.media,
+                                sender_name=getattr(msg, "sender_name", None),   # 👈 أضف هنا
                             )
 
                     # 2. معالجة الكومنتات (فورية)
@@ -1503,6 +1522,9 @@ def waha_webhook():
                 message = handler.parse_message(payload, page.page_id)
                 if not message:
                     return
+                # 👈 سحب الاسم مباشرة من الـ payload بدون أي وسيط
+                raw_data = payload.get("_data", {}) if isinstance(payload.get("_data"), dict) else {}
+                sender_name = raw_data.get("notifyName") or payload.get("notifyName") or payload.get("pushName")
 
                 # وضع الرسالة أو الصورة في Redis Queue
                 enqueue_message(
@@ -1514,6 +1536,7 @@ def waha_webhook():
                     msg_type=message.type,
                     text=message.text,
                     media=message.media,
+                    sender_name=sender_name,   # 👈 تم تمرير sender_name المباشر
                 )
 
             except Exception as e:

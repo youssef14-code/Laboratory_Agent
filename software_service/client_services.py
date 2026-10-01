@@ -218,9 +218,21 @@ class ClientService(BaseService):
             if exchange.created_at:
                 date_str = exchange.created_at.strftime("%Y-%m-%d %H:%M")
 
+            user_msg = str(exchange.user_message or "").strip()
+            # 🛡️ حماية فورية: لو فيه كود Base64 قديم متخزن في الداتابيز استبدله فوراً بـ [صورة]
+            if (
+                user_msg.startswith(("/9j/", "data:image", "JVBERi0", "iVBORw"))
+                or len(user_msg) > 1000
+            ):
+                user_msg = "📷 [صورة مرفقة]"
+
+            bot_msg = str(exchange.bot_reply or "").strip()
+            if len(bot_msg) > 1500:
+                bot_msg = bot_msg[:1500] + "..."
+
             lines.append(f"--- [{date_str}] ---" if date_str else "---")
-            lines.append(f"User: {exchange.user_message}")
-            lines.append(f"Bot: {exchange.bot_reply}")
+            lines.append(f"User: {user_msg}")
+            lines.append(f"Bot: {bot_msg}")
 
         return "\n".join(lines)
 

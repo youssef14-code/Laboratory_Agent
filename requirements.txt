@@ -28,3 +28,4 @@ pymysql
 google-genai
 google-generativeai
 redis>=5.0.0
+langchain-openai
