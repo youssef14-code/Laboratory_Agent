@@ -25,13 +25,39 @@
     <div style="padding:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
 
       <div>
-        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">الاسم</div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">اسم المريض</div>
         <div style="font-weight:600;font-size:1.05rem;">{{ booking.name }}</div>
       </div>
 
       <div>
-        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">رقم الهاتف</div>
-        <div style="font-weight:600;">{{ booking.phone_number }}</div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">السن / سنة الميلاد</div>
+        <div style="font-weight:600;">
+          {% if booking.age %}
+            {% set age_val = booking.age | int %}
+            {% if age_val > 0 %}
+              {% set current_yr = booking.booking_time.year if booking.booking_time else 2026 %}
+              {% if age_val >= 1900 %}
+                {{ current_yr - age_val }} سنة (مواليد {{ age_val }})
+              {% else %}
+                {{ age_val }} سنة (مواليد {{ current_yr - age_val }})
+              {% endif %}
+            {% else %}
+              {{ booking.age }}
+            {% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">رقم الهاتف الأساسي</div>
+        <div style="font-weight:600;">{{ booking.phone_number1 or booking.phone_number or '—' }}</div>
+      </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">رقم هاتف إضافي / بديل</div>
+        <div style="font-weight:600;">{{ booking.phone_number2 or '—' }}</div>
       </div>
       
       <div>
@@ -64,7 +90,7 @@
 
       {% if booking.details %}
       <div style="grid-column:1/-1;">
-        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">تفاصيل إضافية</div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">تفاصيل إضافية / التحاليل المطلوبة</div>
         <div style="
           background:var(--bg-main);
           border:1px solid var(--border);
@@ -97,6 +123,16 @@
         </div>
         <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem;">تحديث الحالة</button>
       </form>
+
+      <!-- Print / Download Ticket Button -->
+      <div style="margin-top:1rem;">
+        <a href="{{ url_for('download_booking_ticket', booking_id=booking.id) }}"
+           class="btn btn-primary"
+           style="width:100%;text-align:center;display:block;"
+           target="_blank">
+          🖨️ طباعة / تنزيل التذكرة
+        </a>
+      </div>
 
       <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);">
         <div class="text-muted" style="font-size:.8rem;margin-bottom:.5rem;">الحالة الحالية</div>

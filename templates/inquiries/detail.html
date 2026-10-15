@@ -16,59 +16,60 @@
   {% endfor %}
 {% endwith %}
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+<!-- ═══════════════════ القسم العلوي: الصورة + البيانات والرد ═══════════════════ -->
+<div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.5rem;align-items:start;margin-bottom:1.5rem;">
 
-  <!-- Left: Prescription image -->
-  <div class="card">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-      <span class="card-title">صورة الوصفة الطبية</span>
+  <!-- العمود الأول: صورة الوصفة الطبية (Sticky لمطابقتها أثناء الرد) -->
+  <div class="card" style="position:sticky;top:1rem;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <span class="card-title">📷 صورة الوصفة الطبية</span>
       {% if inquiry.prescription_img %}
         <a href="{{ url_for('static', filename='uploads/' + inquiry.prescription_img) }}"
            download="prescription_{{ inquiry.id }}.jpg"
            class="btn btn-ghost"
-           style="padding:.35rem .75rem;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem">
+           style="padding:.35rem .75rem;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem;">
           ⬇ تحميل الصورة
         </a>
       {% endif %}
     </div>
-    <div style="padding:1.25rem">
+    <div style="padding:1.25rem;text-align:center;">
       {% if inquiry.prescription_img %}
         <img
           src="{{ url_for('static', filename='uploads/' + inquiry.prescription_img) }}"
           alt="وصفة طبية"
-          style="width:100%;border-radius:10px;border:1px solid var(--border);object-fit:contain;max-height:420px"
+          style="width:100%;border-radius:10px;border:1px solid var(--border);object-fit:contain;max-height:540px;background:#00000008;"
         >
       {% else %}
-        <div style="height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);background:var(--bg-hover);border-radius:10px;border:1px dashed var(--border)">
+        <div style="height:240px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);background:var(--bg-hover);border-radius:10px;border:1px dashed var(--border);">
           لا توجد صورة مرفقة
         </div>
       {% endif %}
     </div>
   </div>
 
-  <!-- Right: Details -->
-  <div style="display:flex;flex-direction:column;gap:1.25rem">
+  <!-- العمود الثاني: معلومات العميل + جزء الرد وتحديد التحاليل + تغيير الحالة -->
+  <div style="display:flex;flex-direction:column;gap:1.25rem;">
 
-    <!-- Client info -->
+    <!-- كارت معلومات العميل -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title">معلومات العميل</span>
+        <span class="card-title">👤 معلومات العميل</span>
       </div>
-      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:.85rem">
+      <div style="padding:1.25rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.9rem;">
 
-        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <span class="text-muted">رقم الهاتف / الاسم </span>
-          <span style="font-weight:600;font-size:1.05rem">{{ inquiry.phone_number or '—' }}</span>
+        <div>
+          <span class="text-muted" style="display:block;font-size:.8rem;margin-bottom:.2rem;">رقم الهاتف / الاسم</span>
+          <strong style="font-size:1.05rem;">{{ inquiry.phone_number or '—' }}</strong>
         </div>
-        
-                <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <span class="text-muted">المنصة</span>
+
+        <div>
+          <span class="text-muted" style="display:block;font-size:.8rem;margin-bottom:.2rem;">المنصة والمصدر</span>
           {% if 'whatsapp' in (inquiry.comes_from or '')|lower %}
-            <span class="badge" style="background:#25D366;color:#fff;padding:0.35rem 0.75rem;border-radius:6px;font-weight:600;font-size:0.85rem">
+            <span class="badge" style="background:#25D366;color:#fff;padding:0.25rem 0.6rem;border-radius:6px;font-weight:600;font-size:0.8rem;">
               🟢 واتساب (WhatsApp)
             </span>
           {% elif 'facebook' in (inquiry.comes_from or '')|lower or 'messenger' in (inquiry.comes_from or '')|lower %}
-            <span class="badge" style="background:#0084FF;color:#fff;padding:0.35rem 0.75rem;border-radius:6px;font-weight:600;font-size:0.85rem">
+            <span class="badge" style="background:#0084FF;color:#fff;padding:0.25rem 0.6rem;border-radius:6px;font-weight:600;font-size:0.8rem;">
               🔵 فيسبوك (Facebook)
             </span>
           {% else %}
@@ -76,116 +77,48 @@
           {% endif %}
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <span class="text-muted">المصدر</span>
-          <span class="pill pill-reviewed">{{ inquiry.comes_from or '—' }}</span>
-        </div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:.75rem;border-bottom:1px solid var(--border)">
-          <span class="text-muted">تاريخ الإرسال</span>
+        <div>
+          <span class="text-muted" style="display:block;font-size:.8rem;margin-bottom:.2rem;">تاريخ الإرسال</span>
           <span>{{ inquiry.created_at.strftime('%Y-%m-%d %H:%M') if inquiry.created_at else '—' }}</span>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="text-muted">الحالة الحالية</span>
+        <div>
+          <span class="text-muted" style="display:block;font-size:.8rem;margin-bottom:.2rem;">الحالة الحالية</span>
           <span class="pill pill-{{ inquiry.status.value | lower | replace(' ', '-') }}">{{ inquiry.status.value }}</span>
         </div>
-      </div>
-    </div>
-
-    <!-- OCR results -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">نتائج التحليل التلقائي</span>
-      </div>
-      <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem">
-
-        <!-- Confidence bar -->
-        <div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
-            <span class="text-muted" style="font-size:.85rem">نسبة الثقة في الوصفة</span>
-            {% if inquiry.confidence_score is not none %}
-              {% set pct = (inquiry.confidence_score * 100) | int %}
-              <strong style="font-size:.9rem">{{ pct }}%</strong>
-            {% endif %}
-          </div>
-          {% if inquiry.confidence_score is not none %}
-            {% set pct = (inquiry.confidence_score * 100) | int %}
-            {% if pct >= 70 %}{% set cls = 'conf-high' %}
-            {% elif pct >= 40 %}{% set cls = 'conf-mid' %}
-            {% else %}{% set cls = 'conf-low' %}{% endif %}
-            <div class="conf-track" style="height:10px;border-radius:6px">
-              <div class="conf-fill {{ cls }}" data-pct="{{ pct }}" style="height:10px;border-radius:6px"></div>
-            </div>
-            {% if pct >= 85 %}
-            <p style="font-size:.8rem;color:#22c55e;margin-top:.35rem">✅ تم قبول الوصفة تلقائياً (ثقة أعلى من 85%)</p>
-            {% else %}
-            <p style="font-size:.8rem;color:#ef4444;margin-top:.35rem">⚠️ الثقة منخفضة — يُنصح بمراجعة يدوية</p>
-            {% endif %}
-          {% else %}
-            <span class="text-muted">لا توجد بيانات OCR</span>
-          {% endif %}
-        </div>
-
-        <!-- Services mentioned -->
-        {% if inquiry.services_mentioned %}
-        <div style="padding-top:.75rem;border-top:1px solid var(--border)">
-          <span class="text-muted" style="font-size:.85rem;display:block;margin-bottom:.5rem">الخدمات المذكورة</span>
-          <div style="display:flex;flex-wrap:wrap;gap:.4rem">
-            {% for svc in inquiry.services_mentioned.split(',') %}
-              <span class="pill pill-reviewed" style="font-size:.8rem">{{ svc.strip() }}</span>
-            {% endfor %}
-          </div>
-        </div>
-        {% endif %}
 
       </div>
     </div>
 
-    <!-- Update status -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">تحديث الحالة</span>
-      </div>
-      <div style="padding:1.25rem">
-        <form method="POST" action="{{ url_for('update_inquiry_status', inquiry_id=inquiry.id) }}" style="display:flex;gap:.75rem;align-items:center">
-          <select name="status" class="form-control" style="flex:1">
-            {% for s in ['Pending','Done','Confirmed','No Show'] %}
-            <option value="{{ s }}" {% if inquiry.status.value == s %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-          </select>
-          <button type="submit" class="btn btn-primary">حفظ</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- Confirm Services Section -->
+    <!-- كارت تحديد التحاليل وتأكيد الروشتة (الرد) - في حالة Pending -->
     {% if inquiry.status.value == 'Pending' %}
-    <div class="card" style="margin-top:1.5rem">
-      <div class="card-header">
-        <span class="card-title">تحديد التحاليل وتأكيد الروشتة</span>
+    <div class="card" style="border: 2px solid var(--primary);">
+      <div class="card-header" style="background:rgba(217,31,38,0.05);display:flex;justify-content:space-between;align-items:center;">
+        <span class="card-title" style="color:var(--primary);font-weight:700;">✍️ تحديد التحاليل والرد على المريض</span>
+        <span class="pill pill-pending">مطلوب المراجعة</span>
       </div>
-      <div style="padding:1.25rem">
-        <input type="text" id="serviceSearch" class="form-control" placeholder="ابحث عن التحليل هنا..." style="margin-bottom:1rem">
+      <div style="padding:1.25rem;">
+        
+        <input type="text" id="serviceSearch" class="form-control" placeholder="🔍 ابحث عن التحليل هنا..." style="margin-bottom:1rem;">
 
         <form method="POST" action="{{ url_for('confirm_inquiry', inquiry_id=inquiry.id) }}">
-          <div style="display:grid; grid-template-columns:1.3fr 1fr; gap:1rem; align-items:start; margin-bottom:1rem;">
+          <div style="display:grid; grid-template-columns:1.2fr 1fr; gap:1rem; align-items:start; margin-bottom:1.25rem;">
 
-            <!-- All services list -->
-            <div id="servicesList" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover);">
+            <!-- قائمة كل التحاليل -->
+            <div id="servicesList" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover);">
               {% for s in services %}
-              <div class="service-item" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0;" data-name="{{ s.name|lower }}">
+              <div class="service-item" style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0;" data-name="{{ s.name|lower }}">
                 <input type="checkbox" name="selected_services" value="{{ s.id }}" id="service_{{ s.id }}"
                        data-name-display="{{ s.name }}" data-price="{{ s.price }}">
-                <label for="service_{{ s.id }}" style="cursor:pointer; color:var(--text-primary); font-size:0.95rem; margin:0">
+                <label for="service_{{ s.id }}" style="cursor:pointer; color:var(--text-primary); font-size:0.9rem; margin:0">
                   {{ s.name }} - <strong style="color:var(--primary)">{{ s.price }} ج.م</strong>
                 </label>
               </div>
               {% endfor %}
             </div>
 
-            <!-- Selected services summary (live) -->
-            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover); max-height: 280px; display:flex; flex-direction:column;">
+            <!-- ملخص التحاليل المختارة والإجمالي -->
+            <div style="border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; background: var(--bg-hover); max-height: 250px; display:flex; flex-direction:column;">
               <span class="text-muted" style="font-size:.8rem; margin-bottom:.5rem; display:block">التحاليل المختارة</span>
               <div id="selectedServicesList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:.35rem;">
                 <span id="noSelectionMsg" class="text-muted" style="font-size:.85rem">لم تحدد أي تحليل بعد</span>
@@ -195,95 +128,114 @@
                 <strong id="selectedTotalPrice" style="color:var(--primary)">0.0 ج.م</strong>
               </div>
             </div>
-
+ 
+                    <!-- خانة الملاحظات الإضافية -->
+          <div style="margin-bottom:1.25rem;">
+            <label for="doctorNotes" style="font-size:0.85rem;font-weight:600;color:var(--text-primary);display:block;margin-bottom:0.4rem;">
+              📝 ملاحظات إضافية للمريض (اختياري - مثلاً: تحليل غير متوفر، شروط خاصة):
+            </label>
+            <textarea name="doctor_notes" id="doctorNotes" rows="2" class="form-control" 
+                      placeholder="اكتب أي ملاحظات إضافية هنا ليتم إرسالها مع الرد للمريض..."
+                      style="resize:vertical;font-size:0.9rem;border-radius:8px;"></textarea>
           </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;padding:0.75rem;font-size:1.05rem;font-weight:600;">
+            🚀 تأكيد وإرسال الرد للمريض
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
 
-          <button type="submit" class="btn btn-primary" style="width:100%">تأكيد وإرسال للمريض </button>
+    <!-- كارت تغيير الحالة يدوياً -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">⚙️ تحديث الحالة</span>
+      </div>
+      <div style="padding:1rem 1.25rem;">
+        <form method="POST" action="{{ url_for('update_inquiry_status', inquiry_id=inquiry.id) }}" style="display:flex;gap:.75rem;align-items:center">
+          <select name="status" class="form-control" style="flex:1">
+            {% for s in ['Pending','Done','Confirmed','No Show'] %}
+            <option value="{{ s }}" {% if inquiry.status.value == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">حفظ الحالة</button>
         </form>
       </div>
     </div>
 
-    <script>
-      document.getElementById('serviceSearch').addEventListener('input', function() {
-        const query = this.value.toLowerCase();
-        const items = document.querySelectorAll('.service-item');
-        items.forEach(item => {
-          const name = item.getAttribute('data-name');
-          if (name.includes(query)) {
-            item.style.display = 'flex';
-          } else {
-            item.style.display = 'none';
-          }
-        });
-      });
-
-      function updateSelectedServicesList() {
-        const checkboxes = document.querySelectorAll('#servicesList input[type="checkbox"]:checked');
-        const listEl = document.getElementById('selectedServicesList');
-        const noSelectionMsg = document.getElementById('noSelectionMsg');
-        const totalEl = document.getElementById('selectedTotalPrice');
-
-        listEl.querySelectorAll('.selected-chip').forEach(el => el.remove());
-
-        let total = 0;
-        checkboxes.forEach(cb => {
-          const name = cb.getAttribute('data-name-display');
-          const price = parseFloat(cb.getAttribute('data-price')) || 0;
-          total += price;
-
-          const chip = document.createElement('div');
-          chip.className = 'selected-chip';
-          chip.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:.4rem; font-size:.85rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:.3rem .5rem;';
-          chip.innerHTML = `
-            <span style="color:var(--text-primary)">${name}</span>
-            <span style="display:flex; align-items:center; gap:.4rem">
-              <strong style="color:var(--primary)">${price} ج.م</strong>
-              <span data-remove-id="${cb.id}" style="cursor:pointer; color:var(--text-muted)">✕</span>
-            </span>
-          `;
-          listEl.appendChild(chip);
-        });
-
-        noSelectionMsg.style.display = checkboxes.length ? 'none' : 'block';
-        totalEl.textContent = total.toFixed(1) + ' ج.م';
-      }
-
-      document.getElementById('servicesList').addEventListener('change', function(e) {
-        if (e.target.matches('input[type="checkbox"]')) {
-          updateSelectedServicesList();
-        }
-      });
-
-      document.getElementById('selectedServicesList').addEventListener('click', function(e) {
-        const removeId = e.target.getAttribute('data-remove-id');
-        if (removeId) {
-          const cb = document.getElementById(removeId);
-          if (cb) {
-            cb.checked = false;
-            updateSelectedServicesList();
-          }
-        }
-      });
-    </script>
-    {% endif %}
-
   </div>
 </div>
 
-<!-- OCR extracted text -->
-{% if inquiry.ocr_extracted_text %}
-<div class="card" style="margin-top:1.5rem">
-  <div class="card-header">
-    <span class="card-title">النص المستخرج من الوصفة</span>
-  </div>
-  <div style="padding:1.25rem">
-    <pre style="background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:'Cairo',sans-serif;font-size:.9rem;white-space:pre-wrap;line-height:1.8;color:var(--text-primary)">{{ inquiry.ocr_extracted_text }}</pre>
-  </div>
-</div>
-{% endif %}
+<!-- ═══════════════════ القسم السفلي: التحليل التلقائي والنص المستخرج ═══════════════════ -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start;margin-bottom:1.5rem;">
 
-<!-- Delete -->
-<div style="margin-top:1.5rem;display:flex;justify-content:flex-start">
+  <!-- كارت نتائج التحليل التلقائي (OCR) -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🤖 نتائج التحليل التلقائي (AI Analysis)</span>
+    </div>
+    <div style="padding:1.25rem;display:flex;flex-direction:column;gap:1rem">
+
+      <!-- شريط نسبة الثقة -->
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:.4rem">
+          <span class="text-muted" style="font-size:.85rem">نسبة الثقة في قراءة الوصفة</span>
+          {% if inquiry.confidence_score is not none %}
+            {% set pct = (inquiry.confidence_score * 100) | int %}
+            <strong style="font-size:.9rem">{{ pct }}%</strong>
+          {% endif %}
+        </div>
+        {% if inquiry.confidence_score is not none %}
+          {% set pct = (inquiry.confidence_score * 100) | int %}
+          {% if pct >= 70 %}{% set cls = 'conf-high' %}
+          {% elif pct >= 40 %}{% set cls = 'conf-mid' %}
+          {% else %}{% set cls = 'conf-low' %}{% endif %}
+          <div class="conf-track" style="height:10px;border-radius:6px;background:var(--bg-hover);">
+            <div class="conf-fill {{ cls }}" data-pct="{{ pct }}" style="height:10px;border-radius:6px"></div>
+          </div>
+          {% if pct >= 85 %}
+          <p style="font-size:.8rem;color:#22c55e;margin-top:.4rem">✅ تم تحليل الوصفة بدقة عالية (أعلى من 85%)</p>
+          {% else %}
+          <p style="font-size:.8rem;color:#ef4444;margin-top:.4rem">⚠️ الثقة منخفضة — يُنصح بمراجعة الطبيب يدوياً</p>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">لا توجد بيانات OCR</span>
+        {% endif %}
+      </div>
+
+      <!-- الخدمات المستخرجة تلقائياً -->
+      {% if inquiry.services_mentioned %}
+      <div style="padding-top:.75rem;border-top:1px solid var(--border)">
+        <span class="text-muted" style="font-size:.85rem;display:block;margin-bottom:.5rem">التحاليل المكتشفة تلقائياً من الصورة</span>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+          {% for svc in inquiry.services_mentioned.split(',') %}
+            <span class="pill pill-reviewed" style="font-size:.8rem;padding:0.3rem 0.6rem;">🧪 {{ svc.strip() }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- كارت النص المستخرج من الوصفة -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📝 النص المستخرج من الوصفة (OCR Text)</span>
+    </div>
+    <div style="padding:1.25rem">
+      {% if inquiry.ocr_extracted_text %}
+        <pre style="background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:'Cairo',sans-serif;font-size:.85rem;white-space:pre-wrap;line-height:1.7;color:var(--text-primary);max-height:220px;overflow-y:auto;">{{ inquiry.ocr_extracted_text }}</pre>
+      {% else %}
+        <div class="text-muted" style="font-size:.85rem;">لم يتم استخراج نص من الوصفة.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- زر حذف الاستفسار -->
+<div style="margin-top:1rem;display:flex;justify-content:flex-start">
   <form method="POST" action="{{ url_for('delete_inquiry', inquiry_id=inquiry.id) }}"
         onsubmit="return confirm('هل أنت متأكد من حذف هذا الاستفسار؟')">
     <button class="btn btn-danger">حذف الاستفسار</button>
@@ -294,8 +246,74 @@
 
 {% block scripts %}
 <script>
+  // تحديث شريط الثقة
   document.querySelectorAll('.conf-fill[data-pct]').forEach(el => {
     el.style.width = el.dataset.pct + '%';
   });
+
+  // منطق البحث وتحديد التحاليل
+  const searchInput = document.getElementById('serviceSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      const items = document.querySelectorAll('.service-item');
+      items.forEach(item => {
+        const name = item.getAttribute('data-name');
+        if (name.includes(query)) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+
+    function updateSelectedServicesList() {
+      const checkboxes = document.querySelectorAll('#servicesList input[type="checkbox"]:checked');
+      const listEl = document.getElementById('selectedServicesList');
+      const noSelectionMsg = document.getElementById('noSelectionMsg');
+      const totalEl = document.getElementById('selectedTotalPrice');
+
+      listEl.querySelectorAll('.selected-chip').forEach(el => el.remove());
+
+      let total = 0;
+      checkboxes.forEach(cb => {
+        const name = cb.getAttribute('data-name-display');
+        const price = parseFloat(cb.getAttribute('data-price')) || 0;
+        total += price;
+
+        const chip = document.createElement('div');
+        chip.className = 'selected-chip';
+        chip.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:.4rem; font-size:.85rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:.3rem .5rem;';
+        chip.innerHTML = `
+          <span style="color:var(--text-primary)">${name}</span>
+          <span style="display:flex; align-items:center; gap:.4rem">
+            <strong style="color:var(--primary)">${price} ج.م</strong>
+            <span data-remove-id="${cb.id}" style="cursor:pointer; color:var(--text-muted)">✕</span>
+          </span>
+        `;
+        listEl.appendChild(chip);
+      });
+
+      noSelectionMsg.style.display = checkboxes.length ? 'none' : 'block';
+      totalEl.textContent = total.toFixed(1) + ' ج.م';
+    }
+
+    document.getElementById('servicesList').addEventListener('change', function(e) {
+      if (e.target.matches('input[type="checkbox"]')) {
+        updateSelectedServicesList();
+      }
+    });
+
+    document.getElementById('selectedServicesList').addEventListener('click', function(e) {
+      const removeId = e.target.getAttribute('data-remove-id');
+      if (removeId) {
+        const cb = document.getElementById(removeId);
+        if (cb) {
+          cb.checked = false;
+          updateSelectedServicesList();
+        }
+      }
+    });
+  }
 </script>
 {% endblock %}

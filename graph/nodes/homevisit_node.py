@@ -8,6 +8,7 @@ from graph.state import AgentState
 from graph.utils import detect_language_fallback, generate_booking_image, get_source_label
 from llm.llm import get_gemini
 from software_service.client_services import ClientService
+from notified_center.EmailSender import send_visit_confirmation_email
 
 
 BOOKING_SYSTEM_PROMPT = """
@@ -16,16 +17,56 @@ You are a helpful, empathetic, and professional AI Assistant for a Medical Labor
 Your task is to guide patients step-by-step to book Home Visits, extract prescription tests, answer questions accurately, and guide them through final confirmation.
 
 ====================
-1. REQUIRED BOOKING FIELDS (All 5 required)
+1. STRICT MANDATORY BOOKING FIELDS (ALL 7 FIELDS ARE STRICTLY REQUIRED)
 ====================
 
-1. name: Patient full name (as provided).
-2. phone_number: Contact phone digits exactly as written by the user. NEVER add, prepend, or guess prefixes (e.g. do not add 010/011/012 if the user did not write them).
-3. address: Patient concise address as provided (accept whatever address the user mentions as-is without repeating phrases).
-4. details: Requested laboratory test names.
-5. date: Preferred visit date (e.g., YYYY-MM-DD or as stated).
+You MUST collect ALL 7 mandatory fields before you can show the confirmation summary or confirm the booking. Never skip any field or leave it as "None" or "غير محدد" or "لا يوجد":
+
+1. name: STRICTLY 4-PART FULL NAME (الاسم رباعي بالكامل):
+   - The patient's name MUST consist of at least 4 parts/names (e.g. "محمد أحمد علي محمود").
+   - NEVER accept a single name (e.g. "يوسف"), a double name (e.g. "يوسف حازم"), or a triple name (e.g. "يوسف حازم أحمد").
+   - If the patient provides fewer than 4 names:
+     * Politely ask them to provide their full 4-part name (الاسم رباعي بالكامل) for accurate lab sample registration.
+     * Example in Egyptian Arabic: "من فضلك الاسم بالكامل رباعي (أربعة أسماء) لتسجيل بيانات التحليل والزيارة بدقة في المعمل."
+     * Do NOT consider the name field complete or move to final confirmation until a valid 4-part name is provided.
+2. age: Patient age in years as an integer (السن / العمر). MUST ask the patient if not provided (e.g., "كم سن / عمر المريض؟").
+3. phone_number1: Primary contact phone digits exactly as written by the user. NEVER add, prepend, or guess prefixes (e.g. do not add 010/011/012 if the user did not write them).
+4. phone_number2: Secondary / alternative contact phone number (رقم هاتف إضافي أو بديل للتواصل). MUST ask the patient if not provided (e.g., "محتاجين رقم هاتف آخر للتواصل لتأكيد الحجز ومتابعة الموعد").
+5. address: DETAILED full physical address (Area + Street + Building number/name + Floor + Apartment + Landmark). NEVER accept incomplete/vague addresses.
+6. details: Requested laboratory test names.
+7. date: Preferred visit date (e.g., YYYY-MM-DD or as stated).
 
 (Note: NEVER ask for visit time/hour — customer service contacts the patient to schedule the exact time slot).
+
+==================================================
+👤 STRICT 4-PART FULL NAME RULE (الاسم رباعي إلزامي)
+==================================================
+1. NO PARTIAL NAMES (ممنوع قبول الاسم الأول أو الثنائي أو الثلاثي):
+   - Medical and laboratory sample registration strictly requires the patient's full 4-part name (الاسم رباعي: 4 كلمات على الأقل).
+   - If the patient provides only a first name (e.g. "يوسف"), a 2-part name (e.g. "يوسف حازم"), or a 3-part name (e.g. "يوسف حازم أحمد"):
+     * You MUST politely ask them to complete their full 4-part name.
+     * Example reply in Egyptian Arabic: "أهلاً بحضرتك، من فضلك محتاجين الاسم بالكامل رباعي (4 أسماء) لتسجيل بيانات التحليل والملف الطبي بالمعمل بدقة."
+     * NEVER mark the name as collected or display the confirmation summary until all 4 names are provided.
+
+==================================================
+📍 STRICT DETAILED ADDRESS REQUIREMENT (CRITICAL)
+==================================================
+For Home Visits, the address MUST be precise and complete so the medical sample collector can reach the patient directly:
+
+1. MANDATORY ADDRESS COMPONENTS:
+   - المنطقة والشارع (Area & Street name)
+   - رقم أو اسم العمارة (Building name or number)
+   - رقم الدور ورقم الشقة (Floor & Apartment number)
+   - علامة مميزة قريبة (Nearby landmark - if available)
+
+2. STRICT REJECTION OF VAGUE / SHORT ADDRESSES:
+   - If the patient provides only a general area or street name (e.g., "سموحة", "شارع بورسعيد", "الهرم", "فيصل محطة العشرين", "العجمي الهانوفيل"):
+     * Do NOT consider the `address` field as collected (leave `address` as null/empty in the `visit` data).
+     * Do NOT move to the confirmation step.
+     * Politely ask them to provide the full details (Building name/number, Floor, Apartment, and Landmark).
+   - Example reply in Egyptian Arabic:
+     "من فضلك محتاج العنوان بالتفصيل عشان أخصائي التحاليل يقدر يوصل لحضرتك بسهولة 🏠:
+     (المنطقة والشارع، رقم أو اسم العمارة، الدور، رقم الشقة، وأقرب علامة مميزة لحضرتك)"
 
 ==================================================
 🚫 FRIDAY RESTRICTION (NO FRIDAY HOME VISITS)
@@ -122,7 +163,7 @@ When the user sends one or multiple prescription images, structure your response
    - NEVER erase, replace, or drop previous history from the summary.
    - Simply MERGE new details into the existing summary.
    - Only write fields that have ACTUALLY been provided (NEVER write "Not provided" or "None").
-   - Always preserve: Prior test inquiries, complaints, past booking references, and current booking info.
+   - Always preserve: Customer name, Age, Primary phone (phone_number1), Secondary phone (phone_number2), Prior test inquiries, complaints, past booking references, and current booking info.
 
 ====================
 3. CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
@@ -169,7 +210,7 @@ Whenever presenting laboratory tests (whether inquired, requested, or extracted 
    - If pricing for any test is unavailable in the retrieved data, state:
      "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
 
-3. 📋 SMART COMBINED INSTRUCTIONS & PREPARATION (ملاحظات التحضير المجمعة):
+3. 📋INSTRUCTIONS & PREPARATION (ملاحظات  ):
    Do NOT repeat preparation lines for every test. Merge instructions intelligently:
    - ⚠️ Specific Preparation/Fasting: If certain tests require fasting or specific conditions, group and mention ONLY those tests concisely (e.g., "يشترط الصيام من 10 إلى 12 ساعة لتحليلي السكر الصائم والدهون").
    - 🚫 Tests with NO prep: Do NOT mention them individually. If no tests need prep, simply state: "لا تشترط هذه التحاليل أي صيام مسبق."
@@ -178,18 +219,87 @@ Whenever presenting laboratory tests (whether inquired, requested, or extracted 
 4. Prescription Flow Question:
    - When presenting extracted tests from a prescription, ask:
      "استخرجت لحضرتك التحاليل دي من الروشتة... تحب نأكد حجز الزيارة المنزلية بيها؟"
-   - Once confirmed, store them in `details` and proceed to collect the missing fields (Address, Date, etc.).
+   - Once confirmed, store them in `details` and proceed to collect ALL remaining mandatory fields (Age, Phone 2, Address, Date, etc.).
+
+
+==================================================
+🌐 MANDATORY LANGUAGE RULE (STRICT ARABIC DEFAULT)
+==================================================
+1. DEFAULT LANGUAGE IS ARABIC (STRICT):
+   - You MUST ALWAYS speak, ask for missing fields, summarize for the patient, and reply in Egyptian Arabic.
+   - Even if the system prompt, instructions, memory, summary, test names, or OCR tags contain English, YOUR FINAL USER-FACING REPLY MUST BE IN ARABIC.
+2. ENGLISH IS ALLOWED ONLY IF:
+   - The user writes their entire message in English, OR
+   - The user explicitly asks to communicate in English.
+   - Otherwise, you are STRICTLY FORBIDDEN from replying in English.
+
+==================================================
+🚫 UNAVAILABLE TESTS (STRICT CONCISE REPORTING)
+==================================================
+1. KEEP IT SHORT & DIRECT:
+   - If a requested test is NOT found or NOT available in the Retrieved Knowledge (or only different/unrelated tests were retrieved):
+     * Simply state in ONE short, polite sentence that this specific test is not currently available in the system.
+     * NEVER narrate your internal search process (e.g., NEVER say: "بحثت في النظام ولم أجد التحليل بنفس المسمى...").
+     * NEVER compare with or mention other unrelated tests retrieved in the background (e.g., NEVER say: "يوجد تحليل GH Basal ولكنه مختلف...").
+     * Example reply in Egyptian Arabic:
+       "تحليل ([اسم التحليل]) غير متوفر حالياً في النظام، ويمكن التأكد من إمكانية توفيره وتكلفته مع خدمة العملاء."
+
+==================================================
+💰 CUMULATIVE PRICING & HOME VISIT FEES (STRICT)
+==================================================
+1. CUMULATIVE PRICING (إجمالي التحاليل التراكمي):
+   - When the patient adds a new test to previously requested tests (e.g., 640 EGP previously + Stool test 35 EGP):
+     * ALWAYS calculate and state the CUMULATIVE total (675 EGP).
+     * Put the prices of ALL active tests into `test_prices` array (e.g., [640.0, 35.0]).
+
+2. HOME VISIT FEES INQUIRIES (رسوم الزيارة المنزلية):
+   - If the patient asks about the price "including visit fee" (e.g., "الحساب كام بالزيارة؟", "رسوم الزيارة كام؟", "التوتال شامل الزيارة"):
+     * State the estimated total of the LAB TESTS ONLY clearly (بدون رسوم الزيارة).
+     * Politely explain that Home Visit transportation fees are determined by customer service based on the patient's area/address during the confirmation call.
+     * Example reply in Egyptian Arabic:
+       "إجمالي التحاليل المطلوبة (مع التحليل الإضافي): *675 جنيه* تقديريًا (بدون رسوم الزيارة المنزلية) 💰
+       أما رسوم الزيارة فيحددها فريق خدمة العملاء بالتواصل مع حضرتك حسب العنوان والمنطقة لتأكيد المعاد النهائي.
+       تحب نأكد الحجز؟"
+
+==================================================
+📅 ADVANCE BOOKING RULE (حجز الزيارة قبلها بيوم على الأقل)
+==================================================
+1. NO SAME-DAY REGULAR HOME VISITS:
+   - Home Visits MUST be booked at least 1 day in advance (بدءًا من الغد فصاعدًا).
+   - If the patient asks for a home visit TODAY (e.g., "عايز الزيارة النهاردة", "ممكن حد يجيلي دلوقتي / النهاردة"):
+     * Politely explain that regular home visits must be booked at least 1 day prior to arrange the sample collector's schedule.
+     * Suggest booking starting from tomorrow or any upcoming suitable date.
+     * Example reply in Egyptian Arabic:
+       "عذرًا، حجز الزيارة المنزلية يلزم تسجيله مسبقًا قبل الموعد بيوم على الأقل لتنسيق خط سير أخصائي السحب. متاح لحضرتك حجز الزيارة بدءًا من غدًا أو أي يوم قادم يناسبك 🗓️."
+
+==================================================
+💩 STOOL SAMPLE RESTRICTION (عينة البراز لا تُسحب منزلياً)
+==================================================
+1. NO HOME COLLECTION FOR STOOL SAMPLES:
+   - Stool samples (تحليل البراز / Stool Analysis) CANNOT be collected at home during a home visit.
+   - The patient must deliver the stool sample directly to the nearest laboratory branch in the proper container.
+
+2. IF THE PATIENT ASKS FOR A HOME VISIT FOR STOOL TEST ONLY:
+   - Politely refuse the home visit and explain that stool samples must be brought directly to the branch.
+   - Example reply in Egyptian Arabic:
+     "عذرًا، عينة تحليل البراز لا يتم سحبها منزلياً، ويلزم تسليم العينة مباشرة لأقرب فرع لحضرتك من فروع المعمل 🏠."
+
+3. IF THE VISIT CONTAINS BLOOD TESTS + STOOL TEST:
+   - Proceed with the home visit for the blood/other tests, but add a clear notice:
+     "📌 تنبيه: عينة تحليل البراز لا يتم سحبها منزلياً، ويتم تسليمها لأقرب فرع لحضرتك."
 
 ====================
-5. CONFIRMATION WORKFLOW
+5. CONFIRMATION WORKFLOW (ALL 7 MANDATORY FIELDS)
 ====================
 
 STEP 1 — DISPLAY SUMMARY:
-When all 5 fields (name, phone, address, details, date) are collected, show the summary and ask the patient to confirm:
+When ALL 7 mandatory fields (name, age, phone_number1, phone_number2, address, details, date) are collected, show the summary and ask the patient to confirm:
 
 📋 ملخص بيانات الزيارة المنزلية:
 👤 الاسم: [Name]
-📱 الهاتف: [Phone]
+🎂 السن: [Age] سنة
+📱 رقم الهاتف الأساسي: [Phone 1]
+📞 رقم هاتف إضافي: [Phone 2]
 📍 العنوان: [Address]
 🧪 التحاليل: [Details]
 📅 التاريخ: [Date]
@@ -201,16 +311,15 @@ When all 5 fields (name, phone, address, details, date) are collected, show the 
 STEP 2 — PATIENT CONFIRMS:
 When the patient replies positively to the confirmation question (e.g. agreeing, confirming, saying yes, تمام، تأكيد، أكد، ماشي، موافق،,etc.):
 - Set `confirmed = true`.
-- Keep the 5 collected fields intact in the `visit` data.
+- Keep ALL 7 collected fields intact in the `visit` data.
 
 STEP 3 — POST CONFIRMATION:
 If the conversation already has a completed booking with a generated Reference ID, do not re-book unless the patient explicitly asks to make another separate booking.
-
 """
 
 
 def _extract_fields_from_summary_text(text: str) -> dict:
-    """استخراج الحقول الـ 5 تلقائياً من ملخص البيانات السابق سواء بإيموجي أو بدونه."""
+    """استخراج الحقول الـ 7 تلقائياً من ملخص البيانات السابق."""
     extracted = {}
     if not text:
         return extracted
@@ -220,10 +329,23 @@ def _extract_fields_from_summary_text(text: str) -> dict:
     if m_name:
         extracted["name"] = m_name.group(1).strip()
         
-    # 📱 الهاتف
-    m_phone = re.search(r'(?:📱\s*)?(?:الهاتف|الموبايل|رقم الهاتف)\s*:\s*([^\n\r]+)', text)
-    if m_phone:
-        extracted["phone_number"] = m_phone.group(1).strip()
+    # 🎂 السن
+    m_age = re.search(r'(?:🎂\s*)?(?:السن|العمر)\s*:\s*([^\n\r]+)', text)
+    if m_age:
+        raw_age = m_age.group(1).strip()
+        age_digits = re.search(r'\d+', raw_age)
+        if age_digits:
+            extracted["age"] = int(age_digits.group(0))
+    # 📱 الهاتف الأساسي
+    m_phone1 = re.search(r'(?:📱\s*)?(?:الهاتف الأساسي|رقم الهاتف الأساسي|الهاتف الأول|الهاتف|الموبايل|رقم الهاتف)\s*:\s*([^\n\r]+)', text)
+    if m_phone1:
+        extracted["phone_number1"] = m_phone1.group(1).strip()
+    # 📞 الهاتف الإضافي
+    m_phone2 = re.search(r'(?:📞\s*)?(?:رقم إضافي|رقم بديل|هاتف إضافي|رقم آخر|الهاتف الثاني|الموبايل الثاني|رقم هاتف إضافي)\s*:\s*([^\n\r]+)', text)
+    if m_phone2:
+        val2 = m_phone2.group(1).strip()
+        if val2 not in ["لا يوجد", "—", "-", "None", "null", "غير محدد"]:
+            extracted["phone_number2"] = val2
         
     # 📍 العنوان
     m_addr = re.search(r'(?:📍\s*)?العنوان\s*:\s*([^\n\r]+)', text)
@@ -241,92 +363,79 @@ def _extract_fields_from_summary_text(text: str) -> dict:
         extracted["date"] = m_date.group(1).strip()
         
     return extracted
-
-
-def _generate_booking_image(visit) -> bytes | None:
+def _generate_booking_image(visit, total_price=None) -> bytes | None:
     """يولد تذكرة الحجز ولا يوقف مسار التنفيذ في حال حدوث خطأ."""
-    print(f"[DEBUG] _generate_booking_image called for visit={visit.reference_id}")
     try:
+        p1 = getattr(visit, "phone_number1", None) or getattr(visit, "phone_number", "")
+        p2 = getattr(visit, "phone_number2", None) or ""
+        v_age = getattr(visit, "age", None)
         img = generate_booking_image(
             name=visit.name,
-            phone=visit.phone_number,
+            phone_number1=p1,
+            phone_number2=p2,
+            age=v_age,
             date=str(visit.date or ""),
             details=visit.details or "",
             reference_id=visit.reference_id,
             address=visit.address or "",
+            total_price=total_price,
+            phone=p1,
         )
-        print(f"[DEBUG] _generate_booking_image SUCCESS, bytes={len(img) if img else 0}")
         return img
     except Exception as e:
         print(f"[Visit Node] PDF generation error: {e}")
         import traceback
         traceback.print_exc()
         return None
-
-
 def visit_node(state: AgentState) -> dict:
     page_id = state.get("page_id")
     sender_id = state.get("sender_id")
     platform_id = state.get("platform_id")
     user_message = state["user_message"]
-
     current_summary = state.get("summary") or ""
     last_bot_message = state.get("last_bot_message") or ""
     chat_history = state.get("chat_history") or ""
     rag_context = state.get("rag_context") or ""
     now = datetime.now()
     current_time_info = now.strftime("Today is %A, %B %d, %Y. Current time is %I:%M %p")
-
     llm = get_gemini()
     structured_llm = llm.with_structured_output(
         HomevisitResponse,
         method="json_schema",
         include_raw=True,
     )
-
     system_prompt = f"""
 {BOOKING_SYSTEM_PROMPT}
-
 ====================
 TEMPORAL CONTEXT
 ====================
 {current_time_info}
-
 ====================
 RETRIEVED KNOWLEDGE
 ====================
 {rag_context or "(No relevant laboratory information was retrieved.)"}
-
-
 ====================
 RECENT CHAT HISTORY (Last Exchanges)
 ====================
 {chat_history or "(No previous chat history)"}
-
 ====================
 MEMORY
 ====================
-
 Summary:
 {current_summary}
-
 Last Bot Message:
 {last_bot_message}
 """
-
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_message),
     ]
-
     try:
         result = structured_llm.invoke(messages)
         parsed: HomevisitResponse = result["parsed"]
         raw_response = result["raw"]
-
         if parsed is None:
             raise ValueError(f"Homevisit parsing failed: {result.get('parsing_error')}")
-
     except Exception as e:
         print(f"[Visit Node] ❌ LLM error | sender_id={sender_id} | error={e}")
         fallback = detect_language_fallback(
@@ -343,7 +452,6 @@ Last Bot Message:
             "booking_image": None,
             "booking_usage": None,
         }
-
     usage = getattr(raw_response, "usage_metadata", None)
     booking_usage = (
         {
@@ -354,38 +462,41 @@ Last Bot Message:
         if usage
         else None
     )
-
     visit_data = parsed.visit.model_dump(exclude_none=True)
-    # 🛡️ شبكة الأمان: لو المريض أكد وكان فيه أي حقل ناقص في استجابة الموديل، نجلبه فوراً من ملخص الرسالة السابقة
+    # 🛡️ استعادة الحقول من الرسائل السابقة
     fallback_fields = _extract_fields_from_summary_text(last_bot_message)
     if not fallback_fields and current_summary:
         fallback_fields = _extract_fields_from_summary_text(current_summary)
-    for field_key in ["name", "phone_number", "address", "details", "date"]:
-        if not visit_data.get(field_key) or visit_data.get(field_key) == "null":
+    for field_key in ["name", "phone_number1", "phone_number2", "age", "address", "details", "date"]:
+        if not visit_data.get(field_key) or visit_data.get(field_key) in ["null", "غير محدد", "لا يوجد"]:
             if fallback_fields.get(field_key):
                 visit_data[field_key] = fallback_fields[field_key]
-    # 🧹 فلترة العنوان لضمان استخراج المكان الصافي بدون أي نصوص زائدة
+    if not visit_data.get("phone_number1") and visit_data.get("phone_number"):
+        visit_data["phone_number1"] = visit_data.get("phone_number")
     if visit_data.get("address"):
-        addr = str(visit_data["address"])
+        addr = str(visit_data["address"]).strip()
         addr = re.split(r'(?:\.|\n)?\s*(?:Date|التاريخ|Booking|Status|Tests|التحاليل|Phone|الهاتف):', addr, flags=re.IGNORECASE)[0].strip()
-        sentences = [s.strip() for s in addr.split('.') if s.strip()]
-        visit_data["address"] = sentences[0] if sentences else addr
-    required_fields = ["name", "phone_number", "address", "details", "date"]
+        visit_data["address"] = addr
+    # 🔒 الحقول الـ 7 كلها إجبارية لتأكيد الحجز
+    required_fields = ["name", "age", "phone_number1", "phone_number2", "address", "details", "date"]
     
-    all_fields_present = all(
-        visit_data.get(f) and visit_data.get(f) != "null"
-        for f in required_fields
-    )
-
+    def _is_valid_field(key):
+        val = visit_data.get(key)
+        if not val or val in ["null", "None", "غير محدد", "لا يوجد"]:
+            return False
+        if key == "age":
+            return str(val).isdigit() and int(val) > 0
+        return True
+    all_fields_present = all(_is_valid_field(f) for f in required_fields)
     visit_saved = False
     visit_reference = None
     booking_image = None
     clean_reply = parsed.reply
-
-    # 💰 حساب الإجمالي التقديري وضبط المسافات بدقة
+    # 💰 حساب الإجمالي التقديري
+    exact_total = None
     if parsed.test_prices:
         exact_total = int(sum(parsed.test_prices))
-        total_str = f"💰 الإجمالي التقديري: {exact_total} جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
+        total_str = f"💰 الإجمالي التقديري: {exact_total} جنيه (السعر تقديري بدون رسوم الزيارة وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
         if re.search(r'💰?\s*الإجمالي.*', clean_reply):
             clean_reply = re.sub(
                 r'💰?\s*الإجمالي.*',
@@ -394,102 +505,104 @@ Last Bot Message:
             )
         else:
             clean_reply = clean_reply.strip() + f"\n\n{total_str}"
-
-    
-
     decision_path = "collecting_fields"
-
     updated_summary = parsed.summary or ""
-
-    # حفظ الحجز عند التأكيد واكتمال البيانات الـ 5
+    # حفظ الحجز عند التأكيد واكتمال الحقول الـ 7
     if parsed.confirmed and all_fields_present:
         try:
-            sender_identity = state.get("sender_identity") or state.get("sender_id") or ""
+            sender_identity = str(state.get("sender_identity") or state.get("sender_id") or "").strip()
             source_label = get_source_label(state.get("platform_name"), platform_id, page_id)
-            if sender_identity:
-                source_label = f"{source_label} - [{sender_identity}]"
-
+            
+            clean_identity = sender_identity.split("@")[0] if "@" in sender_identity else sender_identity
+            if clean_identity and clean_identity.lower() not in ["none", "null", "", "واتساب", "فيسبوك", "عميل"]:
+                source_label = f"{source_label} - [{clean_identity}]"
             tool_input = {
-                "name": visit_data["name"],
-                "phone_number": visit_data["phone_number"],
-                "address": visit_data["address"],
-                "details": visit_data["details"],
+                "name": str(visit_data["name"]),
+                "age": int(visit_data["age"]),
+                "phone_number1": str(visit_data["phone_number1"]),
+                "phone_number2": str(visit_data["phone_number2"]),
+                "address": str(visit_data["address"]),
+                "details": str(visit_data["details"]),
                 "date": str(visit_data["date"]),
-                "comes_from": source_label,  # 👈 يظهر في الداشبورد: واتساب (30 شارع الجلاء فيكتوريا) - 
+                "comes_from": source_label,
             }
-
             result = save_visit_tool.invoke(input=tool_input)
-
             if result.success and result.visit:
                 decision_path = "new_save_success"
                 visit_saved = True
                 visit_reference = result.visit.reference_id
-                booking_image = _generate_booking_image(result.visit)
-
+                booking_image = _generate_booking_image(result.visit, total_price=exact_total)
+                
+                # 📧 إشعار الإيميل
+                try:
+                    send_visit_confirmation_email(
+                        reference_id=visit_reference,
+                        name=visit_data["name"],
+                        phone=visit_data["phone_number1"],
+                        address=visit_data["address"],
+                        details=visit_data["details"],
+                        date=str(visit_data["date"]),
+                        comes_from=source_label,
+                    )
+                except Exception as mail_err:
+                    print(f"[Visit Node] ⚠️ Email notify error: {mail_err}")
+                    
                 clean_reply = detect_language_fallback(
                     user_message,
                     arabic=(
                         f"تم تأكيد حجزك بنجاح ✅\n"
                         f"رقم الطلب: *{visit_reference}*\n\n"
-                        f"هيتم التواصل معاك من فريق خدمة العملاء لتأكيد المعاد نهائيًا.\n"
+                        f"هيتم التواصل معاك من فريق خدمة العملاء لتأكيد المعاد نهائيًا ورسوم الزيارة.\n"
                         f"وده تذكرة الحجز 🎫"
                     ),
                     default=(
                         f"Your booking has been confirmed ✅\n"
                         f"Reference: *{visit_reference}*\n\n"
-                        f"Our customer service team will contact you to confirm the appointment.\n"
+                        f"Our customer service team will contact you to confirm the appointment and visit fee.\n"
                         f"Here's your booking ticket 🎫"
                     ),
                 )
-
-                # 📝 إضافة سطر مختصر بالإنجليزية في الـ Summary بالـ Reference ID ورقم الهاتف فقط
-                booking_record = f"Confirmed Home Visit - Reference ID: {visit_reference}, Phone: {visit_data.get('phone_number')}."
+                booking_record = f"Confirmed Home Visit - Reference ID: {visit_reference}, Phone1: {visit_data.get('phone_number1')}, Phone2: {visit_data.get('phone_number2')}, Age: {visit_data.get('age')}."
                 if visit_reference and visit_reference not in updated_summary:
                     updated_summary = f"{updated_summary}\n{booking_record}".strip()
-
             else:
                 raise ValueError(result.message)
-
         except Exception as e:
             decision_path = "save_tool_error"
             print(f"[Visit Node] ❌ save_visit_tool error: {e}")
+            import traceback
+            traceback.print_exc()
             visit_saved = False
             clean_reply = detect_language_fallback(
                 user_message,
                 arabic="حدث خطأ أثناء حفظ الحجز. حاول مرة أخرى.",
                 default="An error occurred while saving your booking. Please try again.",
             )
-
     elif parsed.confirmed and not all_fields_present:
         decision_path = "confirmed_but_incomplete"
         clean_reply = detect_language_fallback(
             user_message,
-            arabic="قبل ما أقدر أكد الحجز، محتاج أتأكد من بيانات الزيارة كاملة. ممكن تكمل باقي التفاصيل من فضلك؟",
-            default="Before confirming, please provide all the required visit details.",
+            arabic="قبل ما أقدر أكد الحجز، محتاج أتأكد من استكمال كافة بيانات الزيارة (الاسم، السن، رقم الهاتف الأساسي، رقم هاتف إضافي، العنوان بالتفصيل، وتاريخ الزيارة). من فضلك كمل البيانات الناقصة.",
+            default="Before confirming, please provide all 7 required visit details.",
         )
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # 📊 LOGGING: طباعة حالة الحقول ومسار الحجز والتوكنز
-    # ══════════════════════════════════════════════════════════════════════════
+    # 📊 LOGGING
     def _status_icon(val):
-        return f"✅ '{val}'" if (val and val != "null") else "❌ (Missing)"
-
+        return f"✅ '{val}'" if (val and str(val) not in ["null", "None", "غير محدد", "لا يوجد"]) else "❌ (Missing)"
     print("\n" + "─" * 65)
     print(f"🏥 [Visit Node] Booking Progress | Sender: {sender_id}")
     print("─" * 65)
     print(f"  👤 Name     : {_status_icon(visit_data.get('name'))}")
-    print(f"  📱 Phone    : {_status_icon(visit_data.get('phone_number'))}")
+    print(f"  🎂 Age      : {_status_icon(visit_data.get('age'))}")
+    print(f"  📱 Phone 1  : {_status_icon(visit_data.get('phone_number1'))}")
+    print(f"  📞 Phone 2  : {_status_icon(visit_data.get('phone_number2'))}")
     print(f"  📍 Address  : {_status_icon(visit_data.get('address'))}")
     print(f"  🧪 Details  : {_status_icon(visit_data.get('details'))}")
     print(f"  📅 Date     : {_status_icon(visit_data.get('date'))}")
     print("─" * 65)
-    print(f"  🔍 Status   : {'✅ Ready (5/5)' if all_fields_present else '❌ Incomplete'} | Confirmed: {parsed.confirmed} | Path: {decision_path}")
-    if booking_usage:
-        print(f"  📊 Tokens   : In={booking_usage['input_tokens']} | Out={booking_usage['output_tokens']} | Total={booking_usage['total_tokens']}")
+    print(f"  🔍 Status   : {'✅ Ready (7/7)' if all_fields_present else '❌ Incomplete'} | Confirmed: {parsed.confirmed} | Path: {decision_path}")
     if visit_saved:
         print(f"  🎉 Saved Successfully : ✅ Reference: {visit_reference}")
     print("─" * 65 + "\n")
-
     try:
         ClientService.save_chat_exchange(
             platform_id=platform_id,
@@ -501,7 +614,6 @@ Last Bot Message:
         )
     except Exception as e:
         print(f"[Visit Node] ⚠️ Persist error: {e}")
-
     return {
         "response": clean_reply,
         "summary": parsed.summary,
@@ -509,6 +621,6 @@ Last Bot Message:
         "visit_saved": visit_saved,
         "visit_reference": visit_reference,
         "booking_image": booking_image,
-        "booking_pdf": booking_image,    # 👈
+        "booking_pdf": booking_image,
         "booking_usage": booking_usage,
     }

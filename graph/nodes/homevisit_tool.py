@@ -18,7 +18,9 @@ class HomeVisitResult:
 @tool
 def save_visit_tool(
     name: str,
-    phone_number: str,
+    age: int,
+    phone_number1: str,
+    phone_number2: str,
     address: str,
     details: str,
     date: str,
@@ -26,15 +28,14 @@ def save_visit_tool(
 ) -> HomeVisitResult:
     """
     Saves a fully collected and confirmed home visit booking to the database.
-    
-    All 5 main fields (name, phone_number, address, details, date) are strictly required.
-    Returns a HomeVisitResult with success=True and the saved visit object upon success.
+    All 7 fields are required.
     """
     try:
-        # إنشاء الحجز في قاعدة البيانات
         visit, message = HomeVisitService.create_visit(
             name=name.strip(),
-            phone_number=phone_number.strip(),
+            age=int(age) if (age is not None and str(age).isdigit()) else None,
+            phone_number1=phone_number1.strip(),
+            phone_number2=phone_number2.strip() if phone_number2 else None,
             date=str(date).strip(),
             details=details.strip(),
             address=address.strip(),

@@ -105,6 +105,12 @@
         المستخدمون
       </a>
 
+      <a href="{{ url_for('settings') }}"
+        class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+        <i data-lucide="settings" class="nav-icon"></i>
+        الإعدادات
+      </a>
+
     {% endif %}
 
   </nav>

@@ -13,7 +13,7 @@ class InquiryService(BaseService):
     # ── read ──────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def get_all_inquiries(page=1, per_page=10, search=None, status=None):
+    def get_all_inquiries(page=1, per_page=10, search=None, status=None, source=None):
         query = Inquiry.query
 
         if search:
@@ -30,6 +30,17 @@ class InquiryService(BaseService):
                 query = query.filter(Inquiry.status == Status(status))
             except ValueError:
                 pass
+
+        # 🏢 فلترة الفروع والمصدر
+        if source:
+            if source == "facebook":
+                query = query.filter(db.or_(Inquiry.comes_from.ilike('%فيسبوك%'), Inquiry.comes_from.ilike('%facebook%')))
+            elif source == "branch_1":
+                query = query.filter(db.or_(Inquiry.comes_from.ilike('%فيكتوريا%'), Inquiry.comes_from.ilike('%الجلاء%'), Inquiry.comes_from.ilike('%222497324699829%')))
+            elif source == "branch_2":
+                query = query.filter(db.or_(Inquiry.comes_from.ilike('%باكوس%'), Inquiry.comes_from.ilike('%الفتح%')))
+            else:
+                query = query.filter(Inquiry.comes_from.ilike(f'%{source}%'))
 
         query = query.order_by(Inquiry.created_at.desc())
         return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على الاستفسارات")

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% set is_edit = (mode == 'edit') %}
+{% block title %}{{ 'تعديل تحليل' if mode == 'edit' else 'تحليل جديد' }}{% endblock %}
+{% block topbar_title %}{{ 'تعديل التحليل' if mode == 'edit' else 'إضافة تحليل جديد' }}{% endblock %}
+{% block topbar_sub %}{{ form.name if mode == 'edit' else 'بيانات التحليل والمعرفة الذكية في صفحة واحدة' }}{% endblock %}
+
+{% block head %}
+<style>
+  .kp-wrap { --violet:#d91f26; --violet-light:#fff1f2; --mist:#fffaf5; --amber:#f59e0b; --amber-light:#fffbeb;
+             --line:#e2e8f0; --ink-soft:#64748b; max-width:820px; margin:0 auto; display:flex; flex-direction:column; gap:20px; }
+  .kp-label-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .kp-label-text { font-weight:800; font-size:.95rem; display:flex; align-items:center; gap:7px; }
+  .kp-label-text svg { width:17px; height:17px; color:var(--violet); }
+  .kp-count { font-size:.72rem; color:var(--ink-soft); font-weight:600; }
+  .kp-field { margin-bottom:22px; }
+  .kp-textarea { width:100%; line-height:1.8; font-size:.98rem; padding:14px 16px; border-radius:10px;
+             border:1.5px solid var(--line); resize:vertical; font-family:inherit; background:var(--mist); }
+  .kp-textarea:focus { outline:none; border-color:var(--violet); background:#fff; box-shadow:0 0 0 3px var(--violet-light); }
+  .kp-textarea.ai-filled, .kp-tag-container.ai-filled { border-color:#fecaca; background:var(--violet-light); }
+  .kp-hint { font-size:.78rem; color:var(--ink-soft); margin-top:6px; }
+
+  .kp-tag-container { background:var(--mist); border:1.5px solid var(--line); border-radius:10px; padding:12px; }
+  .kp-tag-container:focus-within { border-color:var(--violet); background:#fff; box-shadow:0 0 0 3px var(--violet-light); }
+  .kp-tag-list { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; min-height:32px; align-items:center; }
+  .kp-chip { display:inline-flex; align-items:center; gap:6px; background:#fff1f2; color:#9f1239; padding:5px 12px;
+             border-radius:20px; font-size:.85rem; font-weight:700; border:1px solid #fecaca; }
+  .kp-chip-keyword { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+  .kp-chip-remove { cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
+             border-radius:50%; background:rgba(0,0,0,.1); font-weight:800; font-size:.75rem; }
+  .kp-chip-remove:hover { background:rgba(239,68,68,.8); color:#fff; }
+  .kp-tag-input-row { display:flex; gap:8px; }
+  .kp-tag-input { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:.9rem; outline:none; background:#fff; }
+  .kp-tag-add-btn { background:var(--violet); color:#fff; border:none; border-radius:8px; padding:8px 16px; font-size:.85rem; font-weight:700; cursor:pointer; }
+
+  .kp-ai-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:18px 24px 0; }
+  .kp-btn-generate { display:inline-flex; align-items:center; gap:8px; background:var(--amber-light); color:#b45309;
+             border:1.5px solid #fde68a; font-weight:700; padding:10px 18px; border-radius:10px; cursor:pointer; }
+  .kp-btn-generate:disabled, .kp-submit:disabled { opacity:.55; cursor:not-allowed; }
+  .kp-spin { animation:kp-rotate .9s linear infinite; }
+  @keyframes kp-rotate { to { transform:rotate(360deg); } }
+  .kp-status { display:none; margin:14px 24px 0; padding:12px 16px; border-radius:10px; font-weight:600; font-size:.88rem; }
+  .kp-status.ok { display:block; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+  .kp-status.err { display:block; background:#fff1f2; color:#be123c; border:1px solid #fecdd3; }
+</style>
+{% endblock %}
+
+{% block content %}
+<form action="{{ form_action }}" method="POST" id="labForm" class="kp-wrap">
+
+  <!-- Card 1: lab data -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <i data-lucide="plus-circle" style="color:var(--primary);"></i>
+        <span class="card-title">بيانات التحليل الطبية</span>
+      </div>
+    </div>
+    <div style="padding:24px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">اسم التحليل <span style="color:#ef4444;">*</span></label>
+          <input type="text" name="name" id="f-name" class="form-control" placeholder="مثال: صورة دم كاملة (CBC)" required value="{{ form.name }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">السعر (ج.م) <span style="color:#ef4444;">*</span></label>
+          <input type="number" step="0.01" name="price" id="f-price" class="form-control" placeholder="150.00" required value="{{ form.price }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">العينة المطلوبة</label>
+          <input type="text" name="sample_type" id="f-sample" class="form-control" placeholder="مثال: عينة دم وريدي" value="{{ form.sample_type }}">
+        </div>
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">مدة ظهور النتيجة</label>
+          <input type="text" name="durations" id="f-durations" class="form-control" placeholder="مثال: خلال 24 ساعة" value="{{ form.durations }}">
+        </div>
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" style="font-weight:700;margin-bottom:6px;display:block;">تعليمات وإرشادات للمريض</label>
+          <textarea name="patient_instructions" id="f-instructions" class="form-control" rows="4" placeholder="مثال: يفضل صيام من 8 إلى 12 ساعة قبل سحب العينة...">{{ form.patient_instructions }}</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 2: AI knowledge -->
+  <div class="card">
+    <div class="kp-ai-head">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <i data-lucide="sparkles" style="color:var(--primary);"></i>
+        <span class="card-title">المعرفة الذكية (اختياري)</span>
+      </div>
+      <button type="button" id="generateBtn" class="kp-btn-generate" data-url="{{ url_for('generate_lab_knowledge_preview') }}">
+        <i data-lucide="sparkles" id="genIcon"></i> توليد بالذكاء الاصطناعي
+      </button>
+    </div>
+    <p class="kp-hint" style="padding:6px 24px 0;">لو تركت هذه الحقول فارغة سيتم توليدها تلقائياً عند الحفظ.</p>
+    <div class="kp-status" id="statusBox"></div>
+
+    <div style="padding:24px;">
+      <div class="kp-field">
+        <div class="kp-label-row">
+          <span class="kp-label-text"><i data-lucide="file-text"></i> الوصف الطبي الشامل</span>
+          <span class="kp-count" id="count-description">0 حرف</span>
+        </div>
+        <textarea id="field-description" name="description" class="kp-textarea" rows="5" placeholder="اتركه فارغاً ليتم توليده تلقائياً...">{{ form.description }}</textarea>
+      </div>
+
+      <div class="kp-field">
+        <div class="kp-label-row">
+          <span class="kp-label-text"><i data-lucide="tags"></i> الأسماء البديلة والمرادفات</span>
+          <span class="kp-count" id="count-aliases">0 أسماء</span>
+        </div>
+        <div class="kp-tag-container">
+          <div class="kp-tag-list" id="aliases-list"></div>
+          <div class="kp-tag-input-row">
+            <input type="text" id="aliases-input" class="kp-tag-input" placeholder="اكتب اسم بديل واضغط Enter أو إضافة...">
+            <button type="button" class="kp-tag-add-btn" id="aliases-add-btn">إضافة</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kp-field">
+        <div class="kp-label-row">
+          <span class="kp-label-text"><i data-lucide="key-round"></i> الكلمات المفتاحية للبحث</span>
+          <span class="kp-count" id="count-keywords">0 كلمات</span>
+        </div>
+        <div class="kp-tag-container">
+          <div class="kp-tag-list" id="keywords-list"></div>
+          <div class="kp-tag-input-row">
+            <input type="text" id="keywords-input" class="kp-tag-input" placeholder="اكتب كلمة مفتاحية واضغط Enter أو إضافة...">
+            <button type="button" class="kp-tag-add-btn" id="keywords-add-btn">إضافة</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kp-field" style="margin-bottom:0;">
+        <div class="kp-label-row">
+          <span class="kp-label-text"><i data-lucide="search"></i> نص الفهرس الدلالي</span>
+          <span class="kp-count" id="count-search-text">0 حرف</span>
+        </div>
+        <textarea id="field-search-text" name="search_text" class="kp-textarea" rows="4" placeholder="اتركه فارغاً ليتم توليده تلقائياً...">{{ form.search_text }}</textarea>
+      </div>
+
+      <!-- chips are sent as JSON arrays -->
+      <input type="hidden" name="alias_names" id="hidden-aliases" value="[]">
+      <input type="hidden" name="keywords" id="hidden-keywords" value="[]">
+    </div>
+  </div>
+
+  <div class="form-actions" style="display:flex;gap:12px;justify-content:flex-start;">
+    <button type="submit" id="submitBtn" class="btn btn-primary btn-lg kp-submit">
+      <i data-lucide="check"></i> <span id="submitLabel">{{ 'حفظ التعديلات' if mode == 'edit' else 'إنشاء التحليل' }}</span>
+    </button>
+    <a href="{{ url_for('list_labs') }}" class="btn btn-ghost btn-lg">إلغاء وتراجع</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const $ = id => document.getElementById(id);
+  const descField = $('field-description'), searchField = $('field-search-text');
+  const statusBox = $('statusBox'), generateBtn = $('generateBtn'), genIcon = $('genIcon');
+
+  function toArray(raw) {
+    if (Array.isArray(raw)) return raw;
+    if (raw === null || raw === undefined) return [];
+    let str = String(raw).trim();
+    if (!str) return [];
+    try {
+      const p = JSON.parse(str);
+      if (Array.isArray(p)) return p.map(v => String(v).trim()).filter(Boolean);
+    } catch (e) {}
+    if (/^\[.*\]$/s.test(str)) {
+      return str.slice(1, -1).split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    }
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function bindCount(field, countEl) {
+    const upd = () => countEl.textContent = (field.value || '').length + ' حرف';
+    field.addEventListener('input', () => { upd(); field.classList.remove('ai-filled'); });
+    upd();
+  }
+  bindCount(descField, $('count-description'));
+  bindCount(searchField, $('count-search-text'));
+
+  class TagManager {
+    constructor(listId, inputId, addId, countId, isKeyword) {
+      this.listEl = $(listId); this.inputEl = $(inputId); this.countEl = $(countId);
+      this.boxEl = this.listEl.closest('.kp-tag-container');
+      this.isKeyword = isKeyword; this.tags = [];
+      $(addId).addEventListener('click', () => this.addFromInput());
+      this.inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); this.addFromInput(); }
+      });
+    }
+    setTags(arr) { this.tags = []; toArray(arr).forEach(t => this.addTag(t, false)); this.render(); }
+    addTag(text, render = true) {
+      let clean = String(text || '').trim().replace(/\s+/g, ' ');
+      if (this.isKeyword) clean = clean.toLowerCase();
+      if (!clean) return;
+      if (!this.tags.some(t => t.toLowerCase() === clean.toLowerCase())) {
+        this.tags.push(clean);
+        if (render) this.render();
+      }
+    }
+    addFromInput() {
+      const v = this.inputEl.value;
+      if (!v) return;
+      v.split(/[,\n;]+/).forEach(p => this.addTag(p, false));
+      this.inputEl.value = ''; this.render();
+    }
+    removeTag(i) { this.tags.splice(i, 1); this.render(); this.boxEl.classList.remove('ai-filled'); }
+    render() {
+      this.listEl.innerHTML = '';
+      this.tags.forEach((tag, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'kp-chip' + (this.isKeyword ? ' kp-chip-keyword' : '');
+        chip.textContent = tag;
+        const x = document.createElement('span');
+        x.className = 'kp-chip-remove'; x.innerHTML = '&times;'; x.title = 'حذف';
+        x.addEventListener('click', e => { e.stopPropagation(); this.removeTag(idx); });
+        chip.appendChild(x); this.listEl.appendChild(chip);
+      });
+      this.countEl.textContent = this.tags.length + (this.isKeyword ? ' كلمات' : ' أسماء');
+    }
+  }
+
+  const aliasMgr = new TagManager('aliases-list', 'aliases-input', 'aliases-add-btn', 'count-aliases', false);
+  const keywordMgr = new TagManager('keywords-list', 'keywords-input', 'keywords-add-btn', 'count-keywords', true);
+  // prefill chips (existing lab, or restore after a failed submit)
+  aliasMgr.setTags({{ form.alias_names|tojson }});
+  keywordMgr.setTags({{ form.keywords|tojson }});
+
+  function showStatus(msg, ok) { statusBox.className = 'kp-status ' + (ok ? 'ok' : 'err'); statusBox.textContent = msg; }
+
+  generateBtn.addEventListener('click', function () {
+    const name = $('f-name').value.trim();
+    if (!name) { showStatus('اكتب اسم التحليل أولاً', false); $('f-name').focus(); return; }
+
+    generateBtn.disabled = true; genIcon.classList.add('kp-spin');
+    showStatus('جاري توليد المعرفة عبر الذكاء الاصطناعي...', true);
+
+    fetch(generateBtn.dataset.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        price: $('f-price').value,
+        sample_type: $('f-sample').value,
+        durations: $('f-durations').value,
+        patient_instructions: $('f-instructions').value
+      })
+    })
+      .then(r => r.json())
+      .then(res => {
+        generateBtn.disabled = false; genIcon.classList.remove('kp-spin');
+        if (res.success && res.data) {
+          descField.value = res.data.description || '';
+          searchField.value = res.data.search_text || '';
+          descField.dispatchEvent(new Event('input')); searchField.dispatchEvent(new Event('input'));
+          descField.classList.add('ai-filled'); searchField.classList.add('ai-filled');
+          aliasMgr.setTags(res.data.alias_names || []); aliasMgr.boxEl.classList.add('ai-filled');
+          keywordMgr.setTags(res.data.keywords || []); keywordMgr.boxEl.classList.add('ai-filled');
+          showStatus('✨ تم توليد المعرفة — راجعها وعدّلها قبل الإنشاء.', true);
+        } else {
+          showStatus(res.message || 'حدث خطأ أثناء التوليد', false);
+        }
+      })
+      .catch(() => {
+        generateBtn.disabled = false; genIcon.classList.remove('kp-spin');
+        showStatus('فشل الاتصال بخدمة الذكاء الاصطناعي', false);
+      });
+  });
+
+  $('labForm').addEventListener('submit', function () {
+    // flush text still sitting in the chip inputs
+    aliasMgr.addFromInput(); keywordMgr.addFromInput();
+    $('hidden-aliases').value = JSON.stringify(aliasMgr.tags);
+    $('hidden-keywords').value = JSON.stringify(keywordMgr.tags);
+    // generation on save can take a while: block double submit
+    $('submitBtn').disabled = true;
+    $('submitLabel').textContent = 'جاري الحفظ...';
+  });
+});
+</script>
+{% endblock %}

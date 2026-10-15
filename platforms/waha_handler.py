@@ -45,7 +45,8 @@ class WahaHandler(BaseHandler):
 
         return os.environ.get(
             "WAHA_API_URL",
-            "http://waha:3000"
+            "http://waha1:3000"
+
         ).rstrip("/")
 
     @property

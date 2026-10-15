@@ -4,10 +4,21 @@ from pydantic import BaseModel, Field
 
 class HomevisitData(BaseModel):
     name: Optional[str] = Field(
-        None, description="ONLY the patient full name."
+        None,
+        description=(
+            "The patient's FULL 4-PART NAME (الاسم رباعي بالكامل - at least 4 names/words, e.g. 'يوسف حازم أحمد محمود'). "
+            "CRITICAL: If the user provides fewer than 4 names (e.g. only a first name 'يوسف' or double name 'يوسف حازم'), "
+            "leave this as None so the assistant prompts them to complete their full 4-part name."
+        ),
     )
-    phone_number: Optional[str] = Field(
-        None, description="ONLY the exact phone digits typed by the user verbatim. NEVER autocomplete, guess, or prepend prefixes like '010' or '011'."
+    age: Optional[int] = Field(
+        None, description="STRICTLY REQUIRED: Patient age in years as an integer (e.g. 25, 40). Extract digits only."
+    )
+    phone_number1: Optional[str] = Field(
+        None, description="STRICTLY REQUIRED: Primary contact phone digits typed by the user verbatim."
+    )
+    phone_number2: Optional[str] = Field(
+        None, description="STRICTLY REQUIRED: Secondary / alternative contact phone digits typed by the user verbatim."
     )
     details: Optional[str] = Field(
         None, description="ONLY the requested lab test names (e.g. CBC, Lipid Profile)."
@@ -16,7 +27,7 @@ class HomevisitData(BaseModel):
         None, description="ONLY the visit appointment date (YYYY-MM-DD or as stated)."
     )
     address: Optional[str] = Field(
-        None, description="Concise physical address only (never repeat phrases)."
+        None, description="Detailed physical address ONLY (Must include: Area/Street, Building number/name, Floor, Apartment, and Landmark if any). Set to null if the user provided only a vague or incomplete location."
     )
 
 
@@ -26,7 +37,7 @@ class HomevisitResponse(BaseModel):
     )
     test_prices: list[float] = Field(
         default_factory=list,
-        description="List of prices from Retrieved Knowledge for ONLY the specific tests presented/extracted in your reply, e.g. [150.0, 250.0, 250.0]."
+        description="List of prices for ALL active requested tests in this conversation (cumulative: include both previous and newly added test prices, e.g. [640.0, 35.0])."
     )
     summary: str = Field(
         description=(

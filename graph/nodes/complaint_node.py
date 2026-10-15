@@ -1,11 +1,11 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-
 from graph.nodes.complaint_tool import save_complaint_tool
 from graph.schemas.complaint_sechema import ComplaintResponse
 from graph.state import AgentState
 from graph.utils import detect_language_fallback, get_source_label
 from llm.llm import get_gemini
 from software_service.client_services import ClientService
+from notified_center.EmailSender import send_new_complaint_email
 
 COMPLAINT_SYSTEM_PROMPT = """
 You are a professional customer support assistant for a medical laboratory.
@@ -29,6 +29,17 @@ RULES
 4. Set confirmed=true ONLY when the user explicitly confirms submitting the complaint (e.g., تمام، سجل، اه، أيوة، yes, submit).
 5. Set ready_to_save=true ONLY if phone and complaint_text are both available.
 6. Update the conversation summary while preserving all previously collected information, including customer information, booking information, complaint details, and relevant history. Never remove unrelated information from the summary.
+
+==================================================
+🌐 MANDATORY LANGUAGE RULE (STRICT ARABIC DEFAULT)
+==================================================
+1. DEFAULT LANGUAGE IS ARABIC (STRICT):
+   - You MUST ALWAYS speak, ask for missing fields, summarize for the patient, and reply in Egyptian Arabic.
+   - Even if the system prompt, instructions, memory, summary, test names, or OCR tags contain English, YOUR FINAL USER-FACING REPLY MUST BE IN ARABIC.
+2. ENGLISH IS ALLOWED ONLY IF:
+   - The user writes their entire message in English, OR
+   - The user explicitly asks to communicate in English.
+   - Otherwise, you are STRICTLY FORBIDDEN from replying in English.
 
 ====================
 CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
@@ -132,27 +143,38 @@ RECENT CHAT HISTORY (Last Exchanges)
 
     # استدعاء التول عند اكتمال البيانات والتأكيد
     if parsed.ready_to_save and parsed.confirmed and all_fields_present:
-
         try:
-            sender_identity = state.get("sender_identity") or state.get("sender_id") or ""
+            sender_identity = str(state.get("sender_identity") or state.get("sender_id") or "").strip()
             source_label = get_source_label(state.get("platform_name"), platform_id, page_id)
-            if sender_identity:
-                source_label = f"{source_label} - [{sender_identity}]"
-            # 📱 رقم الهاتف الصافي (الذي كتبه العميل أو رقم واتساب لو لم يكتب)
+            
+            clean_identity = sender_identity.split("@")[0] if "@" in sender_identity else sender_identity
+            if clean_identity and clean_identity.lower() not in ["none", "null", "", "واتساب", "فيسبوك", "عميل"]:
+                source_label = f"{source_label} - [{clean_identity}]"
+
             user_phone = str(complaint_data.get("phone") or "").strip()
             if not user_phone or user_phone.lower() in ["none", "null", ""]:
-                user_phone = str(sender_identity)
+                user_phone = clean_identity
+
             result = save_complaint_tool.invoke(
                 input={
-                    "phone": user_phone,  # 👈 رقم الهاتف النظيف فقط: 01114387382
+                    "phone": user_phone,
                     "complaint_text": complaint_data["complaint_text"],
-                    "comes_from": source_label,  # 👈 المصدر مع هوية الحساب: فيسبوك - [اسم العميل]
+                    "comes_from": source_label,  # 👈 هيظهر: واتساب (30 شارع الجلاء فيكتوريا) - [01113387659]
                 }
             )
 
             if result.success:
 
                 complaint_saved = True
+                
+                try:
+                    send_new_complaint_email(
+                        phone=user_phone,
+                        complaint_text=complaint_data["complaint_text"],
+                        comes_from=source_label,
+                    )
+                except Exception as mail_err:
+                    print(f"[Complaint Node] Email notify error: {mail_err}")
 
                 clean_reply = detect_language_fallback(
                     user_message,

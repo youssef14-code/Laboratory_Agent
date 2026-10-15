@@ -66,11 +66,13 @@ class HomeVisitService(BaseService):
 
     # ── helper function ────────────────────────────────────────────────────────────────
     @staticmethod
-    def _build_visit(name, phone_number, date, details, comes_from, address):
+    def _build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address):
         return Homevisit(
             reference_id=uuid.uuid4().hex[:12].upper(),
             name=name.strip(),
-            phone_number=phone_number.strip(),
+            age=age,
+            phone_number1=phone_number1.strip(),
+            phone_number2=phone_number2.strip(),
             date=date,
             details=details,
             comes_from=comes_from,
@@ -80,31 +82,35 @@ class HomeVisitService(BaseService):
         )
     # ── create ────────────────────────────────────────────────────────────────
     @staticmethod
-    def create_visit(name, phone_number, date, details, comes_from, address):
+    def create_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address):
         if not name or not name.strip():
             return None, "اسم المريض مطلوب"
-        if not phone_number or not phone_number.strip():
+        if not phone_number1 or not phone_number1.strip():
             return None, "رقم الهاتف مطلوب"
         if not address or not address.strip():
             return None, "العنوان مطلوب"
-        visit = HomeVisitService._build_visit(name, phone_number, date, details, comes_from, address)
+        visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address)
         res, msg = BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
         if res is None:
-            visit = HomeVisitService._build_visit(name, phone_number, date, details, comes_from, address)
+            visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address)
             return BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
         return res, msg
     # ── update ────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def update_visit(visit_id, name=None, phone_number=None, date=None, details=None, address=None):
+    def update_visit(visit_id, name=None, age=None, phone_number1=None, phone_number2=None, date=None, details=None, address=None):
         visit = db.session.get(Homevisit, visit_id)
         if not visit:
             return None, "الحجز غير موجود"
 
         if name is not None:
             visit.name = name.strip()
-        if phone_number is not None:
-            visit.phone_number = phone_number.strip()
+        if age is not None:
+            visit.age = age
+        if phone_number1 is not None:
+            visit.phone_number1 = phone_number1.strip()
+        if phone_number2 is not None:
+            visit.phone_number2 = phone_number2.strip()
         if date is not None:
             visit.date = date
         if details is not None:

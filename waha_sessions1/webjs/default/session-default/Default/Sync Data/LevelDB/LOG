@@ -1,3 +1,2 @@
-2026/09/21-19:25:34.558 66 Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/Sync Data/LevelDB/MANIFEST-000001
-2026/09/21-19:25:34.560 66 Recovering log #3
-2026/09/21-19:25:34.561 66 Reusing old log /app/.sessions/webjs/default/session-default/Default/Sync Data/LevelDB/000003.log 
+2026/10/14-18:19:30.322 f6 Creating DB /app/.sessions/webjs/default/session-default/Default/Sync Data/LevelDB since it was missing.
+2026/10/14-18:19:30.339 f6 Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/Sync Data/LevelDB/MANIFEST-000001

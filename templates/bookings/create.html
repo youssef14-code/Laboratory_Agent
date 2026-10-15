@@ -26,14 +26,38 @@
       </div>
 
       <div class="form-group full-width">
-        <label>رقم الهاتف <span style="color:#f87171;">*</span></label>
+        <label>السن (بالسنوات)</label>
+        <input
+          type="number"
+          name="age"
+          class="form-control"
+          placeholder="مثال: 35"
+          min="1"
+          max="120"
+          value="{{ request.form.get('age', '') }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>رقم الهاتف الأساسي <span style="color:#f87171;">*</span></label>
         <input
           type="text"
-          name="phone_number"
+          name="phone_number1"
           class="form-control"
           placeholder="01xxxxxxxxx"
           required
-          value="{{ request.form.get('phone_number', '') }}"
+          value="{{ request.form.get('phone_number1', request.form.get('phone_number', '')) }}"
+        >
+      </div>
+
+      <div class="form-group full-width">
+        <label>رقم هاتف إضافي / بديل (اختياري)</label>
+        <input
+          type="text"
+          name="phone_number2"
+          class="form-control"
+          placeholder="رقم هاتف آخر للتواصل"
+          value="{{ request.form.get('phone_number2', '') }}"
         >
       </div>
 
@@ -43,19 +67,9 @@
           type="text"
           name="date"
           class="form-control"
-          placeholder="مثال: 2024-12-25 أو الأحد الصباح"
+          placeholder="مثال: 2026-10-15 أو الأحد الصباح"
           value="{{ request.form.get('date', '') }}"
         >
-      </div>
-
-      <div class="form-group full-width">
-        <label>تفاصيل إضافية</label>
-        <textarea
-          name="details"
-          class="form-control"
-          rows="3"
-          placeholder="أي ملاحظات إضافية (اختياري)"
-        >{{ request.form.get('details', '') }}</textarea>
       </div>
 
       <div class="form-group full-width">
@@ -68,6 +82,16 @@
           required
           value="{{ request.form.get('address', '') }}"
         >
+      </div>
+
+      <div class="form-group full-width">
+        <label>تفاصيل إضافية / التحاليل المطلوبة</label>
+        <textarea
+          name="details"
+          class="form-control"
+          rows="3"
+          placeholder="أسماء التحاليل أو أي ملاحظات إضافية (اختياري)"
+        >{{ request.form.get('details', '') }}</textarea>
       </div>
 
     </div>

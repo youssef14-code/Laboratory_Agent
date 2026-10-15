@@ -13,7 +13,7 @@ class InquiryResponse(BaseModel):
 
     test_prices: list[float] = Field(
         default_factory=list,
-        description="List of prices extracted from Retrieved Knowledge for the presented tests only, e.g. [150, 250, 250]"
+        description="List of prices for ALL active requested tests in this conversation (cumulative: include both previous and newly added test prices, e.g. [640.0, 35.0])."
     )
 
 

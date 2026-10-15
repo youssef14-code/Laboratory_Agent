@@ -38,9 +38,14 @@ class LabServiceService(BaseService):
 
     # -- create -------------------------------------------------------------------
 
+   # software_services/lab_service_services.py
+# Replace ONLY the create_lab method with this one.
+
     @staticmethod
     def create_lab(name, price, laboratory_id=None, sample_type=None,
-                    durations=None, patient_instructions=None):
+                    durations=None, patient_instructions=None,
+                    description=None, alias_names=None, keywords=None,
+                    search_text=None):
         if not name or not name.strip():
             return None, "اسم التحليل مطلوب"
         try:
@@ -61,30 +66,53 @@ class LabServiceService(BaseService):
 
         lab = LabService(
             laboratory_id=laboratory_id,
-            name=name.strip(),
+            name=clean_name,
             price=price,
             sample_type=(sample_type or "").strip() or None,
             durations=(durations or "").strip() or None,
             patient_instructions=(patient_instructions or "").strip() or None,
+            # knowledge fields (all optional, JSON columns take real lists)
+            description=(description or "").strip() or None,
+            alias_names=list(alias_names) if alias_names else None,
+            keywords=list(keywords) if keywords else None,
+            search_text=(search_text or "").strip() or None,
         )
         return BaseService.commit(lab, success_msg="تم إنشاء التحليل بنجاح", error_prefix="حدث خطأ أثناء إنشاء التحليل")
-
     # -- update -------------------------------------------------------------------
+
+    
 
     @staticmethod
     def update_lab(lab_id, name=None, price=None, sample_type=None,
-                    durations=None, patient_instructions=None):
+                    durations=None, patient_instructions=None,
+                    description=None, alias_names=None, keywords=None,
+                    search_text=None):
         lab = db.session.get(LabService, lab_id)
         if not lab:
             return None, "التحليل غير موجود"
+
+        # ---- validate everything first, mutate after ----
         if price is not None:
             try:
                 price = float(price)
             except (TypeError, ValueError):
                 return None, "السعر غير صحيح"
-            
+
+        clean_name = None
         if name is not None:
-            lab.name = name.strip()
+            clean_name = name.strip()
+            if not clean_name:
+                return None, "اسم التحليل مطلوب"
+            duplicate = LabService.query.filter(
+                db.func.lower(LabService.name) == clean_name.lower(),
+                LabService.id != lab_id,
+            ).first()
+            if duplicate:
+                return None, "يوجد تحليل آخر بنفس الاسم"
+
+        # ---- apply ----
+        if clean_name is not None:
+            lab.name = clean_name
         if price is not None:
             lab.price = price
         if sample_type is not None:
@@ -94,8 +122,17 @@ class LabServiceService(BaseService):
         if patient_instructions is not None:
             lab.patient_instructions = patient_instructions.strip() or None
 
-        return BaseService.update_commit(lab, success_msg="تم تحديث التحليل بنجاح", error_prefix="حدث خطأ أثناء التحديث")
+        # knowledge fields (JSON columns take real lists)
+        if description is not None:
+            lab.description = description.strip() or None
+        if alias_names is not None:
+            lab.alias_names = list(alias_names) or None
+        if keywords is not None:
+            lab.keywords = list(keywords) or None
+        if search_text is not None:
+            lab.search_text = search_text.strip() or None
 
+        return BaseService.update_commit(lab, success_msg="تم تحديث التحليل بنجاح", error_prefix="حدث خطأ أثناء التحديث")
     # -- delete -------------------------------------------------------------------
 
     @staticmethod

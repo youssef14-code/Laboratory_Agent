@@ -1,6 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
 from venv import logger
 import logging
+import math
+from sqlalchemy import func
+
+
 
 from openai import images
 logger = logging.getLogger(__name__)
@@ -12,7 +16,7 @@ load_dotenv()
 
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from dotenv import load_dotenv
@@ -465,27 +469,183 @@ def delete_branch(branch_id):
 # ══════════════════════════════════════════════════════════════════════════
 # Lab (formerly "Service") routes
 # ══════════════════════════════════════════════════════════════════════════
-
-# list labs, with search + pagination
+# ================================================================ helpers
+ 
+def _to_list(val):
+    """Any shape (list, JSON string, 'a, b, c', None) -> clean list of strings."""
+    if isinstance(val, list):
+        return [str(v).strip() for v in val if str(v).strip()]
+    if val is None:
+        return []
+    s = str(val).strip()
+    if not s:
+        return []
+    try:
+        parsed = json.loads(s)
+        if isinstance(parsed, list):
+            return [str(v).strip() for v in parsed if str(v).strip()]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return [x.strip() for x in s.split(',') if x.strip()]
+ 
+ 
+def _parse_price(raw):
+    """Returns a valid non-negative float, or None if invalid."""
+    try:
+        price = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(price) or price < 0:
+        return None
+    return price
+ 
+ 
+def build_lab_knowledge(name, price, sample_type, durations, patient_instructions):
+    """
+    Generates knowledge from typed fields (works before the lab exists in the DB).
+    Returns a dict: description, alias_names, keywords, search_text.
+    Falls back to a template if the AI pipeline fails.
+    """
+    try:
+        from knowledge.schemas import KnowledgeGenerationRequest, EntityType
+        from knowledge.pipeline import run_pre_approval_stage
+ 
+        req = KnowledgeGenerationRequest(
+            name=name,
+            entity_type=EntityType.LAB,
+            patient_instructions=patient_instructions or "",
+            duration=durations or "غير محدد",
+            price=price or 0.0,
+        )
+        res = run_pre_approval_stage(req)
+        return {
+            "description": res.description,
+            "alias_names": _to_list(list(res.alias_names) if res.alias_names else []),
+            "keywords": _to_list(res.keywords),
+            "search_text": res.search_text,
+        }
+    except Exception:
+        import traceback
+        print("=== KNOWLEDGE GENERATION FAILED ===")
+        traceback.print_exc()
+        return {
+            "description": f"تحليل {name} الطبي للمساعدة في التشخيص الطبي وتقييم الوظائف الحيوية للمريض.",
+            "alias_names": [name, f"فحص {name}", f"تحليل {name}"],
+            "keywords": [name, "تحاليل طبية", f"عينة {sample_type or 'دم'}", "فحوصات"],
+            "search_text": f"فحص وتحليل {name} - السعر: {price} ج.م - العينة: {sample_type or 'غير محدد'} - التعليمات: {patient_instructions or 'بدون صيام'}",
+        }
+ 
+ 
+def _lab_form_values(lab=None):
+    """Values shown in the form: POST data if submitting, else the lab, else empty."""
+    if request.method == 'POST':
+        f = request.form
+        return {
+            "name": f.get('name', ''),
+            "price": f.get('price', ''),
+            "sample_type": f.get('sample_type', ''),
+            "durations": f.get('durations', ''),
+            "patient_instructions": f.get('patient_instructions', ''),
+            "description": f.get('description', ''),
+            "search_text": f.get('search_text', ''),
+            "alias_names": _to_list(f.get('alias_names')),
+            "keywords": _to_list(f.get('keywords')),
+        }
+    if lab is not None:
+        return {
+            "name": lab.name or '',
+            "price": lab.price if lab.price is not None else '',
+            "sample_type": lab.sample_type or '',
+            "durations": lab.durations or '',
+            "patient_instructions": lab.patient_instructions or '',
+            "description": lab.description or '',
+            "search_text": lab.search_text or '',
+            "alias_names": _to_list(lab.alias_names),
+            "keywords": _to_list(lab.keywords),
+        }
+    return {
+        "name": '', "price": '', "sample_type": '', "durations": '',
+        "patient_instructions": '', "description": '', "search_text": '',
+        "alias_names": [], "keywords": [],
+    }
+ 
+ 
+def _render_lab_form(mode, lab=None):
+    action = url_for('create_lab') if mode == 'create' else url_for('edit_lab', lab_id=lab.id)
+    return render_template(
+        'labs/form.html',
+        mode=mode, lab=lab, form=_lab_form_values(lab), form_action=action,
+    )
+ 
+ 
+def _read_knowledge_from_form():
+    f = request.form
+    return (
+        (f.get('description') or '').strip(),
+        _to_list(f.get('alias_names')),
+        _to_list(f.get('keywords')),
+        (f.get('search_text') or '').strip(),
+    )
+ 
+ 
+def _fill_missing_knowledge(name, price, sample_type, durations, instructions,
+                            description, aliases, keywords, search_text):
+    """Auto-generate only the knowledge fields that are empty."""
+    if description and aliases and keywords and search_text:
+        return description, aliases, keywords, search_text
+    gen = build_lab_knowledge(name, price, sample_type, durations, instructions)
+    return (
+        description or gen["description"],
+        aliases or gen["alias_names"],
+        keywords or gen["keywords"],
+        search_text or gen["search_text"],
+    )
+ 
+ 
+def _sync_lab_vector(lab, description, aliases, keywords, search_text):
+    """DB -> FAISS. Returns True on success, False on failure (never raises)."""
+    try:
+        from knowledge.schemas import GeneratedKnowledge, EntityType
+        from knowledge.pipeline import run_post_approval_stage
+ 
+        gen_obj = GeneratedKnowledge(
+            description=description,
+            alias_names=aliases,
+            keywords=keywords,
+            # update_knowledge() writes this value, so pass the real one
+            sample_type=lab.sample_type or "",
+            search_text=search_text,
+        )
+        run_post_approval_stage(lab.id, EntityType.LAB, lab.name, gen_obj)
+        return True
+    except Exception:
+        import traceback
+        print(f"=== VECTOR STORE UPDATE FAILED for lab_id={lab.id} ===")
+        traceback.print_exc()
+        return False
+ 
+ 
+# ================================================================== list
+ 
 @app.route('/labs')
 @login_required
 def list_labs():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '').strip() or None
-
+ 
     pagination, msg = LabServiceService.get_all_labs(
         page=page,
         per_page=10,
         search=search
     )
-
+ 
     if pagination is None:
         flash(msg, 'error')
         pagination = type('Pagination', (), {
             'items': [], 'total': 0, 'pages': 0, 'page': 1,
             'has_prev': False, 'has_next': False, 'prev_num': 1, 'next_num': 1
         })()
-
+ 
     try:
         total_labs = LabService.query.count()
         with_specimen = LabService.query.filter(LabService.sample_type.isnot(None), LabService.sample_type != '').count()
@@ -494,14 +654,14 @@ def list_labs():
         total_labs = len(pagination.items)
         with_specimen = 0
         with_instructions = 0
-
+ 
     stats = {
         'total': total_labs,
         'with_specimen': with_specimen,
         'with_instructions': with_instructions,
         'active': total_labs
     }
-
+ 
     return render_template(
         'labs/list.html',
         labs=pagination.items,
@@ -509,29 +669,83 @@ def list_labs():
         search=search,
         stats=stats
     )
-
-
-# create a new lab
+ 
+ 
+# ======================================== AI preview (used by the form)
+ 
+@app.route('/labs/generate-knowledge-preview', methods=['POST'])
+@login_required
+def generate_lab_knowledge_preview():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({"success": False, "message": "اكتب اسم التحليل أولاً"})
+ 
+    try:
+        price = float(payload.get('price') or 0)
+    except (TypeError, ValueError):
+        price = 0.0
+ 
+    data = build_lab_knowledge(
+        name=name,
+        price=price,
+        sample_type=(payload.get('sample_type') or '').strip(),
+        durations=(payload.get('durations') or '').strip(),
+        patient_instructions=(payload.get('patient_instructions') or '').strip(),
+    )
+    return jsonify({"success": True, "data": data, "message": "تم توليد المعرفة بنجاح"})
+ 
+ 
+# ================================================================ create
+ 
 @app.route('/labs/create', methods=['GET', 'POST'])
 @login_required
 def create_lab():
-    if request.method == 'POST':
-        lab, msg = LabServiceService.create_lab(
-            name=request.form.get('name'),
-            price=request.form.get('price'),
-            sample_type=request.form.get('sample_type'),
-            durations=request.form.get('durations'),
-            patient_instructions=request.form.get('patient_instructions'),
-        )
-        if lab:
-            flash(msg, 'success')
-            return redirect(url_for('list_labs'))
+    if request.method == 'GET':
+        return _render_lab_form('create')
+ 
+    f = request.form
+    name = (f.get('name') or '').strip()
+    sample_type = (f.get('sample_type') or '').strip()
+    durations = (f.get('durations') or '').strip()
+    instructions = (f.get('patient_instructions') or '').strip()
+ 
+    if not name:
+        flash("اسم التحليل مطلوب", 'error')
+        return _render_lab_form('create')
+ 
+    price = _parse_price(f.get('price'))
+    if price is None:
+        flash("السعر غير صحيح", 'error')
+        return _render_lab_form('create')
+ 
+    if LabService.query.filter(func.lower(LabService.name) == name.lower()).first():
+        flash("التحليل موجود بالفعل", 'error')
+        return _render_lab_form('create')
+ 
+    description, aliases, keywords, search_text = _fill_missing_knowledge(
+        name, price, sample_type, durations, instructions,
+        *_read_knowledge_from_form()
+    )
+ 
+    lab, msg = LabServiceService.create_lab(
+        name=name, price=price, sample_type=sample_type, durations=durations,
+        patient_instructions=instructions, description=description,
+        alias_names=aliases, keywords=keywords, search_text=search_text,
+    )
+    if not lab:
         flash(msg, 'error')
-
-    return render_template('labs/create.html')
-
-
-# edit an existing lab
+        return _render_lab_form('create')
+ 
+    if _sync_lab_vector(lab, description, aliases, keywords, search_text):
+        flash("تم إنشاء التحليل وحفظ المعرفة وتحديث الفهرس الدلالي بنجاح", 'success')
+    else:
+        flash("تم إنشاء التحليل وحفظ المعرفة، لكن فشل تحديث الفهرس الدلالي — لن يظهر في البحث الدلالي حتى يتم عمل rebuild يدوي.", 'warning')
+    return redirect(url_for('list_labs'))
+ 
+ 
+# ================================================================== edit
+ 
 @app.route('/labs/<int:lab_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_lab(lab_id):
@@ -539,25 +753,59 @@ def edit_lab(lab_id):
     if not lab:
         flash(msg, 'error')
         return redirect(url_for('list_labs'))
-
-    if request.method == 'POST':
-        updated, msg = LabServiceService.update_lab(
-            lab_id=lab_id,
-            name=request.form.get('name'),
-            price=request.form.get('price'),
-            sample_type=request.form.get('sample_type'),
-            durations=request.form.get('durations'),
-            patient_instructions=request.form.get('patient_instructions'),
-        )
-        if updated:
-            flash(msg, 'success')
-            return redirect(url_for('list_labs'))
+ 
+    if request.method == 'GET':
+        return _render_lab_form('edit', lab)
+ 
+    f = request.form
+    name = (f.get('name') or '').strip()
+    sample_type = (f.get('sample_type') or '').strip()
+    durations = (f.get('durations') or '').strip()
+    instructions = (f.get('patient_instructions') or '').strip()
+ 
+    if not name:
+        flash("اسم التحليل مطلوب", 'error')
+        return _render_lab_form('edit', lab)
+ 
+    price = _parse_price(f.get('price'))
+    if price is None:
+        flash("السعر غير صحيح", 'error')
+        return _render_lab_form('edit', lab)
+ 
+    # Check for a duplicate name BEFORE spending an AI call on generation.
+    if LabService.query.filter(
+            func.lower(LabService.name) == name.lower(),
+            LabService.id != lab_id).first():
+        flash("يوجد تحليل آخر بنفس الاسم", 'error')
+        return _render_lab_form('edit', lab)
+ 
+    description, aliases, keywords, search_text = _fill_missing_knowledge(
+        name, price, sample_type, durations, instructions,
+        *_read_knowledge_from_form()
+    )
+ 
+    updated, msg = LabServiceService.update_lab(
+        lab_id, name=name, price=price, sample_type=sample_type,
+        durations=durations, patient_instructions=instructions,
+        description=description, alias_names=aliases,
+        keywords=keywords, search_text=search_text,
+    )
+    if not updated:
         flash(msg, 'error')
-
-    return render_template('labs/edit.html', lab=lab)
-
-
-# delete a lab
+        return _render_lab_form('edit', lab)
+ 
+    # Re-sync FAISS: description/keywords changes alter the vector, and a
+    # rename updates the stored name shown in search results.
+    fresh, _ = LabServiceService.get_lab_by_id(lab_id)
+    if _sync_lab_vector(fresh or lab, description, aliases, keywords, search_text):
+        flash("تم حفظ التعديلات وتحديث الفهرس الدلالي بنجاح", 'success')
+    else:
+        flash("تم حفظ التعديلات، لكن فشل تحديث الفهرس الدلالي — قد لا تظهر النتائج الجديدة في البحث الدلالي حتى يتم عمل rebuild يدوي.", 'warning')
+    return redirect(url_for('list_labs'))
+ 
+ 
+# ================================================================ delete
+ 
 @app.route('/labs/<int:lab_id>/delete', methods=['POST'])
 @login_required
 def delete_lab(lab_id):
@@ -566,150 +814,6 @@ def delete_lab(lab_id):
     return redirect(url_for('list_labs'))
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# Knowledge pipeline routes 
-# ══════════════════════════════════════════════════════════════════════════
-
-@app.route('/labs/<int:lab_id>/knowledge')
-@login_required
-def review_lab_knowledge(lab_id):
-    lab, msg = LabServiceService.get_lab_by_id(lab_id)
-    if not lab:
-        flash(msg, 'error')
-        return redirect(url_for('list_labs'))
-    return render_template('knowledge/review.html', entity=lab, entity_type='lab')
-
-
-
-@app.route('/labs/<int:lab_id>/generate-knowledge', methods=['POST'])
-@login_required
-def generate_lab_knowledge(lab_id):
-    lab, msg = LabServiceService.get_lab_by_id(lab_id)
-    if not lab:
-        return jsonify({"success": False, "message": "التحليل غير موجود"})
-
-    try:
-        from knowledge.schemas import KnowledgeGenerationRequest, EntityType
-        from knowledge.pipeline import run_pre_approval_stage
-
-        req = KnowledgeGenerationRequest(
-            name=lab.name,
-            entity_type=EntityType.LAB,
-            entity_id=lab.id,
-            patient_instructions=lab.patient_instructions or "",
-            duration=lab.durations or "غير محدد",
-            price=lab.price or 0.0
-        )
-        res = run_pre_approval_stage(req)
-
-        # aliases: خليها list حقيقية دايماً، مش string مجمّعة
-        aliases_list = list(res.alias_names) if res.alias_names else []
-
-        # keywords: نفس المبدأ - list حقيقية
-        if isinstance(res.keywords, list):
-            keywords_list = [str(k).strip() for k in res.keywords if str(k).strip()]
-        else:
-            # fallback لو رجعت string بأي شكل (زي "['a','b']" أو "a, b, c")
-            raw = str(res.keywords or "")
-            raw = raw.strip()
-            if raw.startswith('[') and raw.endswith(']'):
-                raw = raw[1:-1]
-            keywords_list = [k.strip().strip("'\"") for k in raw.split(',') if k.strip().strip("'\"")]
-
-        data = {
-            "description": res.description,
-            "alias_names": aliases_list,   # array
-            "keywords": keywords_list,     # array
-            "search_text": res.search_text
-        }
-    except Exception as e:
-        import traceback
-        print("=== KNOWLEDGE GENERATION FAILED ===")
-        traceback.print_exc()
-        name = lab.name
-        data = {
-            "description": f"تحليل {name} الطبي للمساعدة في التشخيص الطبي وتقييم الوظائف الحيوية للمريض.",
-            "alias_names": [name, f"فحص {name}", f"تحليل {name}"],
-            "keywords": [name, "تحاليل طبية", f"عينة {lab.sample_type or 'دم'}", "فحوصات"],
-            "search_text": f"فحص وتحليل {name} - السعر: {lab.price} ج.م - العينة: {lab.sample_type or 'غير محدد'} - التعليمات: {lab.patient_instructions or 'بدون صيام'}"
-        }
-
-    return jsonify({"success": True, "data": data, "message": "تم توليد المعرفة بنجاح عبر Pipeline الذكاء الاصطناعي"})
-
-
-@app.route('/labs/<int:lab_id>/approve-knowledge', methods=['POST'])
-@login_required
-def approve_lab_knowledge(lab_id):
-    lab, msg = LabServiceService.get_lab_by_id(lab_id)
-    if not lab:
-        return jsonify({"success": False, "message": "التحليل غير موجود"})
-
-    data = request.json or request.form
-
-    description = data.get('description', lab.description)
-    alias_names_raw = data.get('alias_names', lab.alias_names)
-    keywords_raw = data.get('keywords', lab.keywords)
-    search_text = data.get('search_text', lab.search_text)
-
-    # طبّع القيم لـ list حقيقية بغض النظر عن الشكل الوارد
-    def normalize_to_list(val):
-        if isinstance(val, list):
-            return [str(v).strip() for v in val if str(v).strip()]
-        if val is None:
-            return []
-        s = str(val).strip()
-        if not s:
-            return []
-        try:
-            parsed = json.loads(s)
-            if isinstance(parsed, list):
-                return [str(v).strip() for v in parsed if str(v).strip()]
-        except (json.JSONDecodeError, TypeError):
-            pass
-        return [x.strip() for x in s.split(',') if x.strip()]
-
-    aliases_list = normalize_to_list(alias_names_raw)
-    keywords_list = normalize_to_list(keywords_raw)
-
-    # العمود نوعه JSON في الـ DB → خزّن الـ list نفسه (Python object)
-    # ومتعملش json.dumps هنا، عشان SQLAlchemy هو اللي بيسيّرلايز القيمة تلقائياً.
-    # لو عملت json.dumps هتتخزن سترينج جوه عمود JSON (double-encoding) مش array حقيقي.
-    lab.description = description
-    lab.alias_names = aliases_list
-    lab.keywords = keywords_list
-    lab.search_text = search_text
-
-    try:
-        db.session.commit()
-
-        vector_update_success = True
-        try:
-            from knowledge.schemas import GeneratedKnowledge,EntityType
-            from knowledge.pipeline import run_post_approval_stage
-
-            gen_obj = GeneratedKnowledge(
-                description=description or lab.name,
-                alias_names=aliases_list or [lab.name],
-                keywords=keywords_list or [lab.name],
-                search_text=search_text or lab.name,
-            )
-            run_post_approval_stage(lab.id, EntityType.LAB, lab.name, gen_obj)
-        except Exception:
-            import traceback
-            print("=== VECTOR STORE UPDATE FAILED ===")
-            traceback.print_exc()
-            vector_update_success = False
-        if vector_update_success:
-             return jsonify({"success": True, "message": "تم اعتماد وحفظ المعرفة وتحديث الفهرس الدلالي بنجاح!"})
-        else:
-            return jsonify({
-                "success": True,
-                "message": "تم حفظ المعرفة في قاعدة البيانات، لكن فشل تحديث الفهرس الدلالي (semantic search) — التحليل مش هيظهر في البحث الدلالي لحد ما يتعمله rebuild يدوي.",
-                "vector_warning": True
-            })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "message": f"حدث خطأ أثناء الحفظ: {str(e)}"})
 
 # ══════════════════════════════════════════════════════════════════════════
 # Booking routes
@@ -764,9 +868,14 @@ def view_booking(booking_id):
 @login_required
 def create_booking():
     if request.method == 'POST':
+        phone_number1 = request.form.get('phone_number1') or request.form.get('phone_number')
+        phone_number2 = request.form.get('phone_number2') or None
+        age = request.form.get('age') or None
         visit, msg = HomeVisitService.create_visit(
             name=request.form.get('name'),
-            phone_number=request.form.get('phone_number'),
+            age=age,
+            phone_number1=phone_number1,
+            phone_number2=phone_number2,
             date=request.form.get('date') or None,
             details=request.form.get('details') or None,
             comes_from='dashboard',
@@ -776,10 +885,7 @@ def create_booking():
             flash(msg, 'success')
             return redirect(url_for('list_bookings'))
         flash(msg, 'error')
-
     return render_template('bookings/create.html')
-
-
 # edit an existing booking
 @app.route('/bookings/<int:booking_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -788,12 +894,16 @@ def edit_booking(booking_id):
     if not booking:
         flash(msg, 'error')
         return redirect(url_for('list_bookings'))
-
     if request.method == 'POST':
+        phone_number1 = request.form.get('phone_number1') or request.form.get('phone_number')
+        phone_number2 = request.form.get('phone_number2') or None
+        age = request.form.get('age') or None
         updated, msg = HomeVisitService.update_visit(
             visit_id=booking_id,
             name=request.form.get('name'),
-            phone_number=request.form.get('phone_number'),
+            age=age,
+            phone_number1=phone_number1,
+            phone_number2=phone_number2,
             date=request.form.get('date') or None,
             details=request.form.get('details') or None,
             address=request.form.get('address') or None,
@@ -802,7 +912,6 @@ def edit_booking(booking_id):
             flash(msg, 'success')
             return redirect(url_for('list_bookings'))
         flash(msg, 'error')
-
     return render_template('bookings/edit.html', booking=booking)
 
 
@@ -827,6 +936,55 @@ def delete_booking(booking_id):
     flash(msg, 'success' if deleted else 'error')
     return redirect(url_for('list_bookings'))
 
+# download booking ticket as PDF
+@app.route('/bookings/<int:booking_id>/ticket.pdf')
+@login_required
+def download_booking_ticket(booking_id):
+    from flask import send_file, abort
+    import os
+
+    booking, msg = HomeVisitService.get_visit_by_id(booking_id)
+    if not booking:
+        abort(404)
+
+    # 1. البحث عن ملف التذكرة الأصلي المحفوظ وقت الشات
+    tickets_dir = os.path.join(app.root_path, "static", "tickets")
+    saved_pdf_path = os.path.join(tickets_dir, f"{booking.reference_id}.pdf")
+
+    if os.path.exists(saved_pdf_path):
+        return send_file(
+            saved_pdf_path,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'ticket-{booking.reference_id}.pdf',
+        )
+
+    # 2. خطوة احتياطية (Fallback): لو كان الحجز قديم جداً ولا يوجد له ملف محفوظ
+    from graph.utils import generate_booking_pdf
+    import io
+
+    phone1 = getattr(booking, 'phone_number1', None) or getattr(booking, 'phone_number', '') or ''
+    phone2 = getattr(booking, 'phone_number2', None) or ''
+    age = getattr(booking, 'age', None)
+
+    pdf_bytes = generate_booking_pdf(
+        name=booking.name or '',
+        phone_number1=phone1,
+        phone_number2=phone2,
+        age=age,
+        date=str(booking.date) if booking.date else '',
+        details=booking.details or '',
+        reference_id=booking.reference_id or '',
+        address=booking.address or '',
+    )
+
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'ticket-{booking.reference_id}.pdf',
+    )
+
 # ══════════════════════════════════════════════════════════════════════════
 # Inquiry (prescription) routes
 # ══════════════════════════════════════════════════════════════════════════
@@ -838,9 +996,10 @@ def list_inquiries():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '').strip()
     status = request.args.get('status', '')
+    source = request.args.get('source', '').strip()
 
     pagination, message = InquiryService.get_all_inquiries(
-        page=page, per_page=10, search=search or None, status=status or None
+        page=page, per_page=10, search=search or None, status=status or None, source=source or None
     )
     if pagination is None:
         flash(message, 'error')
@@ -854,6 +1013,7 @@ def list_inquiries():
         pagination=pagination,
         search=search,
         status=status,
+        source=source,
         statuses=Status,
         stats=stats,
     )
@@ -905,6 +1065,8 @@ def confirm_inquiry(inquiry_id):
         flash('الخدمات المحددة غير صالحة.', 'error')
         return redirect(url_for('inquiry_detail', inquiry_id=inquiry_id))
 
+    # استلام الملاحظات إن وُجدت
+    doctor_notes = request.form.get('doctor_notes', '').strip()
     service_names = []
     message_lines = [
         "📋 أهلاً بك! تمت مراجعة الروشتة الخاصة بك من قبل الطبيب المختص.",
@@ -914,14 +1076,16 @@ def confirm_inquiry(inquiry_id):
     total_price = 0.0
     for s in selected_services:
         service_names.append(s.name)
-        # ❌ حذفنا السعر الفردي وخلينا اسم التحليل مع شروط التحليل إن وجدت
         instruction_note = f" (شروط التحليل: {s.patient_instructions})" if getattr(s, "patient_instructions", None) else ""
         message_lines.append(f"• {s.name}{instruction_note}")
         total_price += s.price
-
     message_lines.append("")
-    # 💰 إظهار الإجمالي فقط في الأسفل
     message_lines.append(f"💰 الإجمالي: {total_price:g} جنيه")
+    
+    # 📌 إضافة الملاحظات إذا كتبها الطبيب/المراجع
+    if doctor_notes:
+        message_lines.append("")
+        message_lines.append(f"📌 ملاحظات: {doctor_notes}")
     message_lines.append("")
     message_lines.append("هل تود تأكيد حجز زيارة منزلية بهذه التحاليل؟ 👍")
     
@@ -1547,9 +1711,125 @@ def waha_webhook():
 
     webhook_executor.submit(process_waha, payload, session_name)
     return "OK", 200
-# ══════════════════════════════════════════════════════════════════════════
-# Run
-# ══════════════════════════════════════════════════════════════════════════
+    
+#-------------------------
+#gmail integration routes
+#-------------------------
+# Gmail integration routes
+#-------------------------
+from google_auth_oauthlib.flow import Flow
+from software_service.tenant_services import TenantService
+
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+# في البيئة الحية نلغي السماح بـ HTTP غير المشفر
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "0"
+
+
+@app.route("/settings")
+@login_required
+def settings():
+    settings_row = TenantService.get_tenant_settings("default_tenant")
+
+    gmail_connected = bool(settings_row and settings_row.gmail_token_json)
+
+    emails = []
+    if settings_row and settings_row.notification_email:
+        emails = [e.strip() for e in settings_row.notification_email.split(",") if e.strip()]
+
+    status = request.args.get("status")
+
+    return render_template(
+        "settings.html",
+        gmail_connected=gmail_connected,
+        emails_json=json.dumps(emails, ensure_ascii=False),
+        status=status,
+    )
+
+
+@app.route("/api/gmail/connect")
+@login_required
+def connect_gmail():
+    redirect_uri = url_for("gmail_callback", _external=True, _scheme="https")
+
+    flow = Flow.from_client_secrets_file(
+        os.environ.get("GMAIL_CREDENTIALS_PATH", "./credentials.json"),
+        scopes=GMAIL_SCOPES,
+        redirect_uri=redirect_uri,
+    )
+
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+
+    session["oauth_state"] = state
+    if getattr(flow, "code_verifier", None):
+        session["code_verifier"] = flow.code_verifier
+
+    return redirect(authorization_url)
+
+
+@app.route("/api/gmail/callback")
+def gmail_callback():
+    if not session.get("oauth_state"):
+        return redirect(url_for("settings", status="gmail_error"))
+
+    redirect_uri = url_for("gmail_callback", _external=True, _scheme="https")
+
+    flow = Flow.from_client_secrets_file(
+        os.environ.get("GMAIL_CREDENTIALS_PATH", "./credentials.json"),
+        scopes=GMAIL_SCOPES,
+        state=session.get("oauth_state"),
+        redirect_uri=redirect_uri,
+        code_verifier=session.get("code_verifier"),
+    )
+
+    # لو Nginx حوّل الـ HTTPS إلى HTTP
+    authorization_response = request.url
+    if authorization_response.startswith("http://"):
+        authorization_response = "https://" + authorization_response[7:]
+
+    flow.fetch_token(authorization_response=authorization_response)
+
+    TenantService.save_gmail_credentials(flow.credentials.to_json(), tenant_id="default_tenant")
+
+    return redirect(url_for("settings", status="gmail_success"))
+
+
+@app.route("/api/gmail/save-recipient", methods=["POST"])
+@login_required
+def save_recipient():
+    data = request.json or {}
+
+    emails = data.get("emails")
+    if emails and isinstance(emails, list):
+        if len(emails) > 20:
+            return jsonify({"success": False, "message": "يمكن إضافة 20 إيميلات بحد أقصى."})
+        recipient_email = ", ".join(e.strip() for e in emails if e.strip())
+    else:
+        recipient_email = (data.get("email") or "").strip()
+
+    if not recipient_email:
+        return jsonify({"success": False, "message": "برجاء إدخال إيميل واحد على الأقل."})
+
+    TenantService.save_notification_email(recipient_email, tenant_id="default_tenant")
+
+    return jsonify({"success": True, "message": "تم حفظ إيميلات الاستقبال بنجاح."})
+
+
+@app.route("/privacy")
+def privacy():
+    return """
+    <html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>سياسة الخصوصية</title></head>
+    <body style="font-family:Arial;max-width:700px;margin:40px auto;line-height:1.8">
+    <h1>سياسة الخصوصية</h1>
+    <p>يستخدم هذا النظام حساب Gmail فقط لإرسال إشعارات داخلية (الحجوزات والروشتات والشكاوى) إلى فريق المعمل.</p>
+    <p>لا نقرأ رسائل البريد ولا نشارك أي بيانات مع أطراف ثالثة، ونستخدم صلاحية الإرسال فقط (gmail.send).</p>
+    <p>للتواصل: ضع إيميلك هنا</p>
+    </body></html>
+    """
 
 # ══════════════════════════════════════════════════════════════════════════
 # Health check

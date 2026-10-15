@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}إعدادات البريد والإشعارات — معمل صفوت شاكر{% endblock %}
+
+{% block topbar_title %}
+<div style="display: flex; align-items: center; gap: 12px;">
+  <div class="header-icon-badge">
+    <i data-lucide="mail"></i>
+  </div>
+  <span style="font-size: 1.35rem; font-weight: 800; color: var(--navy-900);">إعدادات الإشعارات والـ Gmail</span>
+</div>
+{% endblock %}
+{% block topbar_sub %}إدارة حساب Gmail وإيميلات الاستقبال{% endblock %}
+
+{% block content %}
+
+<div class="form-container" style="max-width: 780px;">
+
+  <!-- ── Section 1: Gmail Account Connection ── -->
+  <div class="section-card" style="margin-bottom: 24px;">
+    <div class="section-header">
+      <div class="section-title-wrap">
+        <div class="section-icon" style="background: linear-gradient(135deg, #ea4335 0%, #fbbc05 50%, #34a853 100%);">
+          <i data-lucide="mail" style="color: #fff;"></i>
+        </div>
+        <div>
+          <h3 class="section-title">حساب الإرسال (Gmail Authentication)</h3>
+          <p class="section-subtitle">ربط حساب الـ Gmail الخاص بك ليقوم النظام بإرسال إشعارات الحجز والروشتات تلقائيًا منه.</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 0 24px 24px;">
+      <!-- Connection Status -->
+      <div id="gmailStatusBox" style="
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; border-radius: var(--radius-sm);
+        margin-bottom: 20px;
+        {% if gmail_connected %}
+          background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(20,184,166,0.06));
+          border: 1px solid rgba(34,197,94,0.25);
+        {% else %}
+          background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(239,68,68,0.06));
+          border: 1px solid rgba(245,158,11,0.25);
+        {% endif %}
+      ">
+        {% if gmail_connected %}
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(34,197,94,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i data-lucide="check-circle" style="width: 20px; height: 20px; color: var(--green-500);"></i>
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--green-500);">✅ حساب Gmail متصل بنجاح</div>
+            <div style="font-size: 0.82rem; color: var(--ink-500);">النظام جاهز لإرسال الإشعارات تلقائيًا عبر Gmail.</div>
+          </div>
+        {% else %}
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(245,158,11,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <i data-lucide="alert-triangle" style="width: 20px; height: 20px; color: var(--amber-500);"></i>
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--amber-500);">⚠️ لم يتم ربط حساب Gmail بعد</div>
+            <div style="font-size: 0.82rem; color: var(--ink-500);">يرجى ربط حساب Gmail لتفعيل إرسال الإشعارات تلقائيًا.</div>
+          </div>
+        {% endif %}
+      </div>
+
+      <a href="{{ url_for('connect_gmail') }}" class="btn btn-primary" style="
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 10px 24px; font-size: 0.92rem; font-weight: 700;
+        border-radius: var(--radius-sm); text-decoration: none;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M15.545 6.558a9.42 9.42 0 0 0 .139-1.626c0-.72-.086-1.425-.243-2.102H7.9v3.972h4.357a3.722 3.722 0 0 1-1.614 2.441v2.032h2.615c1.53-1.408 2.413-3.483 2.413-5.715z"/>
+          <path d="M7.9 16c2.163 0 3.978-.716 5.304-1.942l-2.615-2.032c-.717.481-1.637.766-2.689.766-2.072 0-3.83-1.398-4.457-3.284H.813v2.091A7.997 7.997 0 0 0 7.9 16z"/>
+          <path d="M3.443 9.508a4.802 4.802 0 0 1 0-3.016V4.401H.813a7.997 7.997 0 0 0 0 7.198l2.63-2.091z"/>
+          <path d="M7.9 3.208c1.176 0 2.235.405 3.067 1.202l2.302-2.302C11.873.801 10.058 0 7.9 0A7.997 7.997 0 0 0 .813 4.401l2.63 2.091C4.07 4.606 5.828 3.208 7.9 3.208z"/>
+        </svg>
+        {% if gmail_connected %}إعادة ربط حساب Gmail{% else %}ربط حساب Gmail للإرسال{% endif %}
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Notification Emails ── -->
+  <div class="section-card">
+    <div class="section-header">
+      <div class="section-title-wrap">
+        <div class="section-icon">
+          <i data-lucide="bell-ring"></i>
+        </div>
+        <div>
+          <h3 class="section-title">إيميلات استقبال الإشعارات</h3>
+          <p class="section-subtitle">الإيميلات التي ستصلها إشعارات الحجوزات الجديدة والروشتات المعلقة (بحد أقصى 20 إيميلات).</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 0 24px 24px;">
+      <div id="emailFieldsContainer">
+        <!-- Email fields will be rendered by JS -->
+      </div>
+
+      <button type="button" id="addEmailBtn" onclick="addEmailField()" style="
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 8px 16px; font-size: 0.85rem; font-weight: 600;
+        background: rgba(37,99,235,0.06); color: var(--blue-600);
+        border: 1px dashed rgba(37,99,235,0.3); border-radius: var(--radius-sm);
+        cursor: pointer; margin-top: 8px; transition: all 0.2s;
+      ">
+        <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i>
+        إضافة إيميل آخر
+      </button>
+
+      <div style="margin-top: 24px;">
+        <button onclick="saveAllEmails()" class="btn-save-test" style="min-width: 200px; display: inline-flex; align-items: center; gap: 10px; justify-content: center;">
+          <i data-lucide="save" style="width: 18px; height: 18px;"></i>
+          حفظ إيميلات الاستقبال
+        </button>
+      </div>
+
+      <!-- Success/Error feedback -->
+      <div id="saveResultMsg" style="
+        display: none; margin-top: 16px; padding: 12px 18px;
+        border-radius: var(--radius-sm); font-size: 0.88rem; font-weight: 600;
+      "></div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Initial emails from server
+  const existingEmails = {{ emails_json | safe }};
+  const MAX_EMAILS = 20;
+  let emailCount = 0;
+
+  function createEmailFieldHTML(index, value) {
+    return `
+      <div class="form-group" style="margin-bottom: 14px; position: relative;" id="emailRow_${index}">
+        <label class="field-label" style="margin-bottom: 6px;">
+          <i data-lucide="at-sign" class="tf-field-label-icon"></i>
+          إيميل الاستقبال ${index + 1}
+        </label>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="tf-input-icon-wrap" style="flex: 1;">
+            <i data-lucide="mail" class="tf-input-icon"></i>
+            <input
+              type="email"
+              class="form-control tf-input-with-icon email-input"
+              placeholder="example@gmail.com"
+              value="${value}"
+              dir="ltr"
+              style="text-align: left;"
+            />
+          </div>
+          ${index > 0 ? `
+            <button type="button" onclick="removeEmailField(${index})" style="
+              width: 40px; height: 40px; border-radius: var(--radius-sm);
+              border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.06);
+              color: var(--red-500); cursor: pointer; display: flex;
+              align-items: center; justify-content: center; transition: all 0.2s;
+              flex-shrink: 0;
+            " title="حذف هذا الإيميل">
+              <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderEmails() {
+    const container = document.getElementById('emailFieldsContainer');
+    container.innerHTML = '';
+    const emails = existingEmails.length > 0 ? existingEmails : [''];
+    emailCount = emails.length;
+
+    emails.forEach((email, i) => {
+      container.insertAdjacentHTML('beforeend', createEmailFieldHTML(i, email));
+    });
+
+    updateAddButton();
+    // Re-initialize lucide icons for dynamically added elements
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function addEmailField() {
+    if (emailCount >= MAX_EMAILS) return;
+    const container = document.getElementById('emailFieldsContainer');
+    container.insertAdjacentHTML('beforeend', createEmailFieldHTML(emailCount, ''));
+    emailCount++;
+    updateAddButton();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function removeEmailField(index) {
+    const row = document.getElementById(`emailRow_${index}`);
+    if (row) row.remove();
+    // Re-index remaining fields
+    reindexFields();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function reindexFields() {
+    const container = document.getElementById('emailFieldsContainer');
+    const rows = container.querySelectorAll('[id^="emailRow_"]');
+    emailCount = rows.length;
+    rows.forEach((row, i) => {
+      row.id = `emailRow_${i}`;
+      const label = row.querySelector('.field-label');
+      if (label) {
+        // Update the label text node only (preserve icon)
+        const icon = label.querySelector('i');
+        label.innerHTML = '';
+        if (icon) label.appendChild(icon);
+        label.appendChild(document.createTextNode(` إيميل الاستقبال ${i + 1}`));
+      }
+    });
+    updateAddButton();
+  }
+
+  function updateAddButton() {
+    const btn = document.getElementById('addEmailBtn');
+    if (emailCount >= MAX_EMAILS) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = 'inline-flex';
+    }
+  }
+
+  function showResult(success, message) {
+    const el = document.getElementById('saveResultMsg');
+    el.style.display = 'block';
+    el.textContent = message;
+    if (success) {
+      el.style.background = 'linear-gradient(135deg, rgba(34,197,94,0.08), rgba(20,184,166,0.06))';
+      el.style.border = '1px solid rgba(34,197,94,0.25)';
+      el.style.color = 'var(--green-500)';
+    } else {
+      el.style.background = 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(245,158,11,0.06))';
+      el.style.border = '1px solid rgba(239,68,68,0.25)';
+      el.style.color = 'var(--red-500)';
+    }
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
+
+  async function saveAllEmails() {
+    const inputs = document.querySelectorAll('.email-input');
+    const emails = [];
+
+    for (const inp of inputs) {
+      const v = inp.value.trim();
+      if (v) {
+        // Basic email validation
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          showResult(false, `❌ الإيميل "${v}" غير صالح.`);
+          inp.focus();
+          return;
+        }
+        emails.push(v);
+      }
+    }
+
+    if (emails.length === 0) {
+      showResult(false, '❌ برجاء إدخال إيميل واحد على الأقل.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/gmail/save-recipient', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails: emails })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showResult(true, `✅ تم حفظ ${emails.length} إيميل بنجاح!`);
+      } else {
+        showResult(false, '❌ حدث خطأ: ' + data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      showResult(false, '❌ فشل الاتصال بالخادم.');
+    }
+  }
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', renderEmails);
+</script>
+{% endblock %}

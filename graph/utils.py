@@ -4,7 +4,7 @@ import io
 import json
 import os
 import re
-from typing import Optional
+from typing import Optional , Union
 import unicodedata
 
 import arabic_reshaper
@@ -199,11 +199,15 @@ def _ar(text) -> str:
 
 def generate_booking_pdf(
     name: str,
-    phone: str,
     date: str,
     details: str,
     reference_id: str,
     address: str,
+    phone_number1: str = "",
+    phone_number2: str = "",
+    age: Optional[int | str] = None,
+    total_price: Optional[float | int | str] = None,
+    phone: str = "",  # Backward compatibility
 ) -> bytes:
     font = _register_font()
     buffer = io.BytesIO()
@@ -227,7 +231,6 @@ def generate_booking_pdf(
     if os.path.exists(logo_path):
         logo = Image(logo_path, width=42 * mm, height=26 * mm)
     else:
-        print(f"[generate_booking_pdf] WARNING: logo missing at {logo_path} — ticket generated without it (reference_id={reference_id})")
         logo = Paragraph("", _ps("empty", font, 1))
 
     title_table = Table(
@@ -285,61 +288,188 @@ def generate_booking_pdf(
     story.append(ref)
     story.append(Spacer(1, 6 * mm))
 
-    # ── Info Table (5 Fields) ─────────────────────────────────────────────────
+    # 💰 حساب الإجمالي تلقائياً إذا لم يتم تمريره
+    if total_price is None and details:
+        try:
+            from models.models import LabService
+            
+            # 1. تقسيم أسماء التحاليل بفواصل الأسطر، والنقاط، والـ Bullet Points، والفواصل
+            raw_parts = re.split(r'[\n\r•]+', str(details))
+            test_queries = []
+            for part in raw_parts:
+                part = part.strip()
+                if not part:
+                    continue
+                sub_parts = re.split(r'[,،]+', part)
+                for sp in sub_parts:
+                    clean_q = re.sub(r'^\d+[\.\-\)]\s*', '', sp).strip()
+                    clean_q = re.sub(r'^(تحليل|فحص|اختبار|test|analysis)\s+', '', clean_q, flags=re.IGNORECASE).strip()
+                    if clean_q:
+                        test_queries.append(clean_q)
+
+            # 2. جلب جميع خدمات المعمل المتاحة
+            all_services = LabService.query.all()
+            matched_service_ids = set()
+            calc_total = 0.0
+
+            for q in test_queries:
+                q_lower = q.lower()
+                q_nodots = re.sub(r'\.', '', q_lower).strip()
+                matched_svc = None
+
+                # أ) البحث بالتطابق التام بالاسم
+                for svc in all_services:
+                    if svc.id in matched_service_ids or not svc.price:
+                        continue
+                    s_name = (svc.name or '').strip().lower()
+                    s_nodots = re.sub(r'\.', '', s_name).strip()
+                    if s_name == q_lower or s_nodots == q_nodots:
+                        matched_svc = svc
+                        break
+
+                # ب) البحث في الأسماء البديلة (alias_names)
+                if not matched_svc:
+                    for svc in all_services:
+                        if svc.id in matched_service_ids or not svc.price:
+                            continue
+                        aliases = parse_alias_names(svc.alias_names) if hasattr(svc, 'alias_names') else []
+                        for alias in aliases:
+                            a_lower = alias.strip().lower()
+                            a_nodots = re.sub(r'\.', '', a_lower).strip()
+                            if a_lower == q_lower or a_nodots == q_nodots:
+                                matched_svc = svc
+                                break
+                        if matched_svc:
+                            break
+
+                # ج) البحث الجزئي المتبادل
+                if not matched_svc:
+                    for svc in all_services:
+                        if svc.id in matched_service_ids or not svc.price:
+                            continue
+                        s_name = (svc.name or '').strip().lower()
+                        s_nodots = re.sub(r'\.', '', s_name).strip()
+                        if len(s_nodots) >= 3:
+                            pat = r'\b' + re.escape(s_nodots) + r'\b'
+                            if re.search(pat, q_nodots) or (s_nodots in q_nodots):
+                                matched_svc = svc
+                                break
+
+                # د) البحث الجزئي داخل الـ aliases المتبادلة
+                if not matched_svc:
+                    for svc in all_services:
+                        if svc.id in matched_service_ids or not svc.price:
+                            continue
+                        aliases = parse_alias_names(svc.alias_names) if hasattr(svc, 'alias_names') else []
+                        for alias in aliases:
+                            a_nodots = re.sub(r'\.', '', alias.strip().lower()).strip()
+                            if len(a_nodots) >= 3 and (a_nodots in q_nodots or q_nodots in a_nodots):
+                                matched_svc = svc
+                                break
+                        if matched_svc:
+                            break
+
+                # هـ) مطابقة الكلمات المفتاحية أو search_text
+                if not matched_svc and len(q_nodots) >= 3:
+                    for svc in all_services:
+                        if svc.id in matched_service_ids or not svc.price:
+                            continue
+                        search_txt = (svc.search_text or '').lower()
+                        if q_nodots in search_txt:
+                            matched_svc = svc
+                            break
+
+                if matched_svc and matched_svc.price:
+                    calc_total += matched_svc.price
+                    matched_service_ids.add(matched_svc.id)
+
+            if calc_total > 0:
+                total_price = int(calc_total) if calc_total.is_integer() else calc_total
+
+        except Exception as e:
+            print(f"[generate_booking_pdf] Error calculating total: {e}")
+
+    price_display = f"{total_price} ج.م (بدون رسوم الزيارة)" if total_price else "يتم تأكيده مع خدمة العملاء"
+
+    # ── حساب سنة الميلاد والسن ────────────────────────────────────────────────
+    main_phone = phone_number1 or phone or "—"
+    second_phone = phone_number2 or "—"
+
+    current_year = datetime.now().year
+    birth_year = None
+    age_clean = None
+
+    if age is not None and str(age).strip():
+        m_age = re.search(r'\d+', str(age))
+        if m_age:
+            val = int(m_age.group())
+            # إذا كتب المريض سنة ميلاده خطأ مكان السن (مثل 1995)
+            if val >= 1900 and val <= current_year:
+                birth_year = val
+                age_clean = current_year - birth_year
+            # إذا كتب السن الطبيعي (مثل 25)
+            elif 0 <= val < 130:
+                age_clean = val
+                birth_year = current_year - age_clean
+
+    if age_clean is not None and birth_year is not None:
+        age_display = f"{age_clean} سنة (مواليد {birth_year})"
+    elif age:
+        age_display = f"{age} سنة" if str(age).isdigit() else str(age)
+    else:
+        age_display = "—"
+
+    # ── Info Table (الحقول كاملة مع السن وسنة الميلاد) ─────────────────────────
     fields = [
         ("Patient Name", "اسم المريض", name),
-        ("Phone", "رقم الهاتف", phone),
+        ("Age / Birth Year", "السن / سنة الميلاد", age_display),
+        ("Primary Phone", "رقم الهاتف الأساسي", main_phone),
+        ("Secondary Phone", "رقم هاتف إضافي", second_phone),
+        ("Estimated Total", "الإجمالي التقديري", price_display),
         ("Visit Date", "تاريخ الزيارة", date),
         ("Required Analysis", "التحاليل المطلوبة", details),
         ("Address", "العنوان التفصيلي", address),
     ]
-    missing_fields = [en_lbl for en_lbl, _, val in fields if not val]
-    if missing_fields:
-        print(f"[generate_booking_pdf] WARNING: empty field(s) {missing_fields} for reference_id={reference_id} — will render as '—'")
 
     label_col_w = 78 * mm
     val_col_w = usable_w - label_col_w
-
     rows = []
     for i, (en_lbl, ar_lbl, val) in enumerate(fields):
         lbl_text = f"{en_lbl} / {_ar(ar_lbl)}"
         lbl_cell = Paragraph(lbl_text, _ps(f"l_{i}", font, 9, MUTED, align=0))
-
         val_str = str(val or "—")
         val_is_ar = _is_arabic(val_str)
         val_text = _ar(val_str) if val_is_ar else val_str
         val_align = 2 if val_is_ar else 0
-
         val_cell = Paragraph(val_text, _ps(f"v_{i}", font, 10, DARK, align=val_align))
         rows.append([lbl_cell, val_cell])
 
     info = Table(rows, colWidths=[label_col_w, val_col_w])
-    info.setStyle(
-        TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), WHITE),
-            ("BACKGROUND", (0, 0), (-1, 0), LIGHT_ROW),
-            ("BACKGROUND", (0, 2), (-1, 2), LIGHT_ROW),
-            ("BACKGROUND", (0, 4), (-1, 4), LIGHT_ROW),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.5, colors.HexColor("#DDE3EE")),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ])
-    )
+    
+    table_styles = [
+        ("BACKGROUND", (0, 0), (-1, -1), WHITE),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.5, colors.HexColor("#DDE3EE")),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]
+    for r_idx in range(len(rows)):
+        if r_idx % 2 == 0:
+            table_styles.append(("BACKGROUND", (0, r_idx), (-1, r_idx), LIGHT_ROW))
+    info.setStyle(TableStyle(table_styles))
     story.append(info)
-    story.append(Spacer(1, 8 * mm))
+    story.append(Spacer(1, 6 * mm))
 
     # Footer
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#C5D0E0")))
     story.append(Spacer(1, 3 * mm))
-
     issued = datetime.now(timezone.utc).strftime("%B %d, %Y %H:%M UTC")
     footer_table = Table(
         [[
             Paragraph(f"Issued: {issued}", _ps("fl", font, 8, MUTED, align=0)),
-            Paragraph(_ar("سيتم التواصل معكم لتأكيد الموعد النهائي"), _ps("fr", font, 8, MUTED, align=2)),
+            Paragraph(_ar("سيتم التواصل معكم لتأكيد الموعد النهائي ورسوم الزيارة"), _ps("fr", font, 8, MUTED, align=2)),
         ]],
         colWidths=[usable_w / 2, usable_w / 2],
     )
@@ -350,31 +480,49 @@ def generate_booking_pdf(
         ])
     )
     story.append(footer_table)
-
     doc.build(story)
     return buffer.getvalue()
 
 
 def generate_booking_image(
     name: str,
-    phone: str,
     date: str,
     details: str,
     reference_id: str,
     address: str,
+    phone_number1: str = "",
+    phone_number2: str = "",
+    age: Optional[int | str] = None,
+    total_price: Optional[float | int | str] = None,
+    phone: str = "",
     dpi: int = 200,
 ) -> bytes:
     """يولد بطاقة الحجز كصورة PNG عالية الجودة باستخدام pymupdf."""
     pdf_bytes = generate_booking_pdf(
         name=name,
-        phone=phone,
         date=date,
         details=details,
         reference_id=reference_id,
         address=address,
+        phone_number1=phone_number1,
+        phone_number2=phone_number2,
+        age=age,
+        total_price=total_price,
+        phone=phone,
     )
 
-    # تحويل الـ PDF لـ PNG بـ pymupdf
+    # حفظ نسخة الـ PDF للتأكد من تطابقها عند الطباعة من الداشبورد
+    try:
+        from flask import current_app
+        tickets_dir = os.path.join(current_app.root_path, "static", "tickets")
+        os.makedirs(tickets_dir, exist_ok=True)
+        pdf_path = os.path.join(tickets_dir, f"{reference_id}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+    except Exception as e:
+        print(f"[generate_booking_image] Could not cache PDF ticket: {e}")
+
+    # تحويل الـ PDF لـ PNG
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     page = doc[0]
     zoom = dpi / 72

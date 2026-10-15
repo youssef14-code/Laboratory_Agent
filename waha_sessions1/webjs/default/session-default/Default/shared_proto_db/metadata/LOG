@@ -1,3 +1,2 @@
-2026/09/21-19:25:34.938 5d Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/shared_proto_db/metadata/MANIFEST-000001
-2026/09/21-19:25:34.938 5d Recovering log #3
-2026/09/21-19:25:34.939 5d Reusing old log /app/.sessions/webjs/default/session-default/Default/shared_proto_db/metadata/000003.log 
+2026/10/14-18:19:30.759 f6 Creating DB /app/.sessions/webjs/default/session-default/Default/shared_proto_db/metadata since it was missing.
+2026/10/14-18:19:30.764 f6 Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/shared_proto_db/metadata/MANIFEST-000001

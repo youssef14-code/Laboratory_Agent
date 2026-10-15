@@ -171,9 +171,11 @@ class Homevisit(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference_id = db.Column(db.String(20), unique=True, nullable=True, index=True)
     name = db.Column(db.String(120), nullable=False)
+    age = db.Column(db.Integer, nullable=True)
     details = db.Column(db.Text)
     date = db.Column(db.String(100))
-    phone_number = db.Column(db.String(50))
+    phone_number1 = db.Column(db.String(50))
+    phone_number2 = db.Column(db.String(50))
     status = db.Column(db.Enum(Status), default=Status.PENDING)
     booking_time = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
@@ -218,3 +220,15 @@ class Subscription(db.Model):
     default=True,
     nullable=False,
        )        
+
+class TenantSettings(db.Model):
+    __tablename__ = "tenant_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.String(50), unique=True, nullable=False)
+    
+    # 1. الإيميل اللي العميل عايز يستلم عليه الرسائل
+    notification_email = db.Column(db.String(255), nullable=True)
+    
+    # 2. نص الـ Token الخاص بـ Gmail اللي هيرجع من Google
+    gmail_token_json = db.Column(db.Text, nullable=True)         

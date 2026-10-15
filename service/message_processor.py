@@ -1,7 +1,7 @@
 import os
 import uuid
-from pymupdf import message
 import requests
+from urllib.parse import quote
 import time
 from graph.agent_response import AgentResponse
 from graph.graph import get_agent_graph
@@ -10,6 +10,7 @@ from ocr.processor import process_prescription_ocr
 from software_service.client_services import ClientService
 import logging
 logger = logging.getLogger(__name__)
+
 
 class IncomingMessage:
     def __init__(
@@ -21,7 +22,9 @@ class IncomingMessage:
         text=None,
         media=None,
         platform_name=None,
-        sender_name=None,     # 👈 إضافة هذا الحقل
+        sender_name=None,
+        session=None,         # WAHA session name (from webhook payload["session"])
+        sender_phone=None,    # real phone from webhook payload (SenderAlt / remoteJidAlt) if present
     ):
         self.sender_id = sender_id
         self.page_id = page_id
@@ -30,7 +33,9 @@ class IncomingMessage:
         self.type = msg_type
         self.text = text
         self.media = media
-        self.sender_name = sender_name # 👈 حفظ الاسم
+        self.sender_name = sender_name
+        self.session = session
+        self.sender_phone = sender_phone
 
 
 # Pricing per model (USD per token)
@@ -39,7 +44,7 @@ OCR_OUTPUT_COST_PER_TOKEN = 2.5 / 1_000_000
 
 FLASH_INPUT_COST_PER_TOKEN = 0.25 / 1_000_000
 FLASH_OUTPUT_COST_PER_TOKEN = 1.5 / 1_000_000
- 
+
 
 def _calc_total_usage(result: dict, ocr_usage: dict = None) -> dict:
     """حساب استهلاك التوكنز والتكلفة لجميع النودات."""
@@ -101,69 +106,157 @@ def _calc_total_usage(result: dict, ocr_usage: dict = None) -> dict:
     }
 
 
+def _is_empty_identity_name(value) -> bool:
+    """Return True when a profile name is not usable."""
+    if value is None:
+        return True
+
+    value = str(value).strip().lower()
+    return value in {"", "none", "null", "unknown"}
+
+
+def _extract_whatsapp_phone(value) -> str | None:
+    """Extract a real phone from a WhatsApp JID (…@c.us / …@s.whatsapp.net).
+
+    Examples:
+        201505202239@c.us -> 201505202239
+        201505202239@s.whatsapp.net -> 201505202239
+
+    A LID is never treated as a phone number.
+    """
+    if value is None:
+        return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    domain = None
+    if "@" in raw:
+        raw, domain = raw.split("@", 1)
+
+    if domain and domain.lower() == "lid":
+        return None
+
+    return raw if raw.isdigit() else None
+
+
+def _get_phone_from_waha_lid(sender: str, session_name: str, page_id=None) -> str | None:
+    """Resolve a WhatsApp LID to the real phone number through the right WAHA container."""
+    from platforms.waha_handler import WahaHandler
+
+    base_url = WahaHandler._resolve_base_url(page_id)
+    headers = {"X-Api-Key": os.environ.get("WAHA_API_KEY", "")}
+    url = (
+        f"{base_url}/api/{quote(str(session_name), safe='')}"
+        f"/lids/{quote(str(sender), safe='')}"
+    )
+
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code != 200:
+            logger.warning("LID lookup failed: status=%s url=%s", response.status_code, url)
+            return None
+
+        data = response.json()
+        pn = data.get("pn") if isinstance(data, dict) else None
+        phone = _extract_whatsapp_phone(pn)
+        if not phone:
+            logger.warning("LID lookup returned no phone (pn=%r) for %s", pn, sender)
+        return phone
+
+    except (requests.RequestException, ValueError):
+        logger.exception("LID lookup error url=%s", url)
+        return None
+
+
 def _get_client_identity(message: IncomingMessage, page) -> str:
-    """جلب رقم الهاتف أو اسم العميل بدقة."""
-    platform = (message.platform_name or "").lower()
+    """Return a real WhatsApp phone number or a Facebook profile name.
 
-    # 🟢 واتساب
-    if platform == "whatsapp" or getattr(message, "platform_id", None) == 2:
-        sender = str(message.sender_id or "")
-        sender_name = getattr(message, "sender_name", None)
+    WhatsApp order:
+      1. Phone from webhook payload (sender_phone), if present.
+      2. Existing @c.us or @s.whatsapp.net phone ID.
+      3. Resolve @lid (or bare number) through WAHA.
+      4. Return an empty string if a real phone cannot be obtained.
 
-        # 1. إذا وصل الاسم من الـ Webhook
-        if sender_name and str(sender_name).strip() and str(sender_name).strip().lower() not in ["none", "null", ""]:
+    A numeric LID is never returned as if it were a phone number.
+    """
+    platform = (getattr(message, "platform_name", None) or "").lower()
+    platform_id = getattr(message, "platform_id", None)
+    sender = str(getattr(message, "sender_id", None) or "").strip()
+    sender_name = getattr(message, "sender_name", None)
+    msg_session = getattr(message, "session", None)
+
+    # ───────────── WhatsApp ─────────────
+    if platform == "whatsapp" or platform_id == 2:
+        sender_lower = sender.lower()
+        session_name = msg_session or os.environ.get("WAHA_SESSION", "") or "default"
+        page_id = getattr(message, "page_id", None)
+
+        # 1. phone from webhook payload (if present)
+        alt_phone = _extract_whatsapp_phone(getattr(message, "sender_phone", None))
+        if alt_phone:
+            return alt_phone
+
+        # 2. already a real phone JID
+        if "@c.us" in sender_lower or "@s.whatsapp.net" in sender_lower:
+            phone = _extract_whatsapp_phone(sender)
+            if phone:
+                return phone
+
+        # 3. LID (with suffix) or bare digits -> resolve through WAHA
+        if "@lid" in sender_lower or sender.isdigit():
+            return _get_phone_from_waha_lid(sender, session_name, page_id) or ""
+
+        return ""
+
+    # ───────────── Facebook / Messenger ─────────────
+    if platform in {"facebook", "messenger"} or platform_id == 1:
+        token = getattr(page, "token", None)
+
+        if token and sender:
+            try:
+                url = f"https://graph.facebook.com/v19.0/{sender}"
+                response = requests.get(
+                    url,
+                    params={
+                        "fields": "first_name,last_name,name",
+                        "access_token": token,
+                    },
+                    timeout=5,
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    name = data.get("name") or (
+                        f"{data.get('first_name', '')} "
+                        f"{data.get('last_name', '')}"
+                    ).strip()
+                    if name:
+                        return name
+                else:
+                    logger.error(
+                        "[FB] Graph API error status=%s (token expired / no permission?)",
+                        response.status_code,
+                    )
+
+            except requests.RequestException:
+                logger.exception("[FB-ERR] request failed: sender=%r", sender)
+            except (TypeError, ValueError):
+                logger.exception("[FB-ERR] invalid JSON: sender=%r", sender)
+
+        if not _is_empty_identity_name(sender_name):
             return str(sender_name).strip()
 
-        # 2. إذا كان الرقم صريحاً
-        if "@c.us" in sender or "@s.whatsapp.net" in sender:
-            num = sender.split("@")[0]
-            if num.startswith("201") or len(num) >= 11:
-                return num
+        return sender
 
-        # 3. محاولة جلب الاسم مباشرة من كونتينر WAHA (waha1 أو waha)
-        for host in ["http://waha1:3000", "http://waha:3000", "http://localhost:3000"]:
-            try:
-                url = f"{host}/api/contacts/{sender}?session=default"
-                res = requests.get(url, timeout=3)
-                if res.status_code == 200:
-                    data = res.json()
-                    name = data.get("pushname") or data.get("name")
-                    if name:
-                        print(f"👉 [DIRECT WAHA FETCH SUCCESS] name={name}")
-                        return str(name).strip()
-            except Exception:
-                continue
-
-        return "واتساب"
-
-    # 🔵 فيسبوك
-    elif platform in ["facebook", "messenger"] or getattr(message, "platform_id", None) == 1:
-        try:
-            url = f"https://graph.facebook.com/v19.0/{message.sender_id}"
-            res = requests.get(
-                url,
-                params={"fields": "name,first_name,last_name", "access_token": page.token},
-                timeout=4,
-            )
-            if res.status_code == 200:
-                data = res.json()
-                name = data.get("name") or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
-                if name:
-                    return f"{name}"
-        except Exception as e:
-            print(f"[Facebook Name Fetch Error]: {e}")
-
-    return getattr(message, "sender_name", None) or "عميل"
+    return sender
 
 
 def _consume_subscription(message: "IncomingMessage", usage: dict) -> None:
     """خصم استهلاك الرسالة من باقة المختبر."""
     try:
-        try:
-            from software_service.subscripition_service import SubscriptionService
-        except ImportError:
-            from software_service.subscripition_service import SubscriptionService
-
+        from software_service.subscripition_service import SubscriptionService
         from models.models import Page
 
         page = Page.query.filter_by(
@@ -188,6 +281,7 @@ def _consume_subscription(message: "IncomingMessage", usage: dict) -> None:
 
     except Exception as e:
         print(f"[_consume_subscription] Error: {e}")
+
 
 def _consume_subscription_direct(message: "IncomingMessage", count: int = 1) -> None:
     """خصم رسائل من الاشتراك مباشرة بعدد محدد (بدون حساب tokens)."""
@@ -300,7 +394,7 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
     }
 
     call_start_time = time.perf_counter()
-    
+
     try:
         result = get_agent_graph().invoke(state)
         response_obj = AgentResponse.from_result(result)
@@ -320,12 +414,13 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
             },
         )
         return "عذرًا، حدث خطأ مؤقت. يرجى المحاولة مرة أخرى.", None
-    
+
     total_latency_sec = time.perf_counter() - call_start_time
     total_latency_ms = int(total_latency_sec * 1000)
 
     usage = _calc_total_usage(result, ocr_usage=ocr_usage)
-# 🚨 تنبيه فوري عبر الإيميل لو استهلاك الريكويست تجاوز 30,000 توكن
+
+    # 🚨 تنبيه فوري عبر الإيميل لو استهلاك الريكويست تجاوز 30,000 توكن
     TOKEN_ALERT_THRESHOLD = int(os.environ.get("TOKEN_ALERT_THRESHOLD", 30000))
     if usage["total_tokens"] >= TOKEN_ALERT_THRESHOLD:
         try:
@@ -357,6 +452,7 @@ def run_agent(message: IncomingMessage, ocr_usage: dict = None) -> tuple[str, by
             print(f"🚨 [ALERT SENT] High token usage alert sent ({usage['total_tokens']:,} tokens).")
         except Exception as alert_err:
             print(f"[run_agent] Failed to send high token alert: {alert_err}")
+
     # خصم الاستهلاك من الاشتراك
     _consume_subscription(message, usage)
 
@@ -454,7 +550,7 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
 
         with open(image_path, "wb") as f:
             f.write(image_bytes)
-        
+
         client_identifier = _get_client_identity(message, page)
 
         # 4. تشغيل OCR
@@ -471,15 +567,14 @@ def handle_image_message(message: IncomingMessage, page) -> tuple[str, bytes | N
         if ocr_result.get("success"):
             extracted_tests = [t for t in (ocr_result.get("services_mentioned") or []) if t]
             tests_list = ", ".join(extracted_tests) if extracted_tests else ocr_result.get("extracted_text", "")
-
             message.text = (
-                "[OCR Extracted Tests prescription image]\n"
+                "[تم استخراج التحاليل التالية من صورة الروشتة المرفقة]:\n"
                 f"{tests_list}\n\n"
-                "Please provide full details, preparations needed, and prices for these tests."
+                "برجاء الرد باللغة العربية (اللهجة المصرية) وتوضيح تفاصيل التحاليل والتحضيرات المطلوبة والأسعار وعرض حجز الزيارة المنزلية."
             )
             logger.info("[handle_image_message] : %s", tests_list)
             result_text, ticket = run_agent(message, ocr_usage=ocr_usage)
-            _consume_subscription_direct(message, count=1)  # +1 للـ OCR
+            _consume_subscription_direct(message, count=1)
             return result_text, ticket
 
         # ⏳ 2. صورة روشتة لكن الخط غير مقروء -> تحويل للطبيب
@@ -571,7 +666,7 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
                 detailed_images_report.append(f"📄 الروشتة #{idx}: ❌ تعذر تحميل الصورة.")
                 continue
 
-            # حفظ الصورةOCR successful. Extracted tests
+            # حفظ الصورة
             project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             uploads_dir = os.path.join(project_dir, "static", "uploads")
             os.makedirs(uploads_dir, exist_ok=True)
@@ -579,9 +674,9 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
 
             with open(image_path, "wb") as f:
                 f.write(image_bytes)
-  
+
             client_identifier = _get_client_identity(msg, page)
-             
+
             # تشغيل OCR
             ocr_result = process_prescription_ocr(
                 image_path=image_path,
@@ -651,15 +746,15 @@ def handle_multi_image_messages(image_messages: list, page, combined_text: str =
 
     last_msg = image_messages[-1]
     last_msg.text = (
-        f"[MULTI-PRESCRIPTION IMAGES REPORT - TOTAL {total_images_count} IMAGES]\n\n"
+        f"[تقرير الروشتات الطبية المرفقة - إجمالي {total_images_count} صور]\n\n"
         f"{full_report_text}{user_notes_part}\n\n"
-        "MANDATORY INSTRUCTIONS FOR AGENT:\n"
-        f"1. You MUST list EVERY image from #1 to #{total_images_count} without skipping any number!\n"
-        "2. For readable prescriptions: list their tests and preparation.\n"
-        "3. For doctor review prescriptions: write clearly that it was forwarded to the doctor for review.\n"
-        "4. For invalid/spam images: you MUST explicitly write that this image is not a valid medical prescription.\n"
-        "5. Provide the combined total ONLY for the readable tests at the bottom.\n"
-        "6. Ask about home visit or branch visit."
+        "تعليمات هامة للرد (يجب التحدث باللغة العربية المصرية حصراً):\n"
+        f"1. اذكر كل روشتة من #1 إلى #{total_images_count} بدون تخطي أي رقم.\n"
+        "2. للروشتات المقروءة: اذكر التحاليل وتحضيراتها.\n"
+        "3. للروشتات قيد المراجعة: وضح تحويلها للطبيب.\n"
+        "4. للصور غير الصالحة: وضح أنها ليست روشتة طبية صالحة.\n"
+        "5. اعرض الإجمالي التقديري للتحاليل المقروءة فقط في الأسفل.\n"
+        "6. اعرض حجز زيارة منزلية أو التوجه للفرع."
     )
 
     result_text, ticket = run_agent(last_msg, ocr_usage=total_ocr_usage)

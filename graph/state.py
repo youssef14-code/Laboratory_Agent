@@ -11,6 +11,9 @@ class AgentState(TypedDict):
     branch_id: Optional[int]
 
 
+    sender_identity: str | None
+    sender_name: str | None
+
     # conversation
     user_message: str
     response: Optional[str]

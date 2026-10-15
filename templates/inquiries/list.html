@@ -59,7 +59,7 @@
 
 <!-- Toolbar -->
 <div class="toolbar">
-  <form method="GET" action="{{ url_for('list_inquiries') }}" class="toolbar-filters">
+  <form method="GET" action="{{ url_for('list_inquiries') }}" class="toolbar-filters" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
     <div class="search-box">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -73,15 +73,24 @@
       >
     </div>
 
-    <select name="status" class="form-control" style="width:160px" onchange="this.form.submit()">
+    <!-- فلترة الحالات -->
+    <select name="status" class="form-control" style="width:auto;" onchange="this.form.submit()">
       <option value="">كل الحالات</option>
       {% for s in statuses %}
       <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.value }}</option>
       {% endfor %}
     </select>
 
+    <!-- 🏢 فلترة الفروع والمصادر -->
+    <select name="source" class="form-control" style="width:auto;" onchange="this.form.submit()">
+      <option value="">كل الفروع والمصادر</option>
+      <option value="branch_1" {% if source == 'branch_1' %}selected{% endif %}>واتساب - فرع فيكتوريا</option>
+      <option value="branch_2" {% if source == 'branch_2' %}selected{% endif %}>واتساب - فرع باكوس</option>
+      <option value="facebook" {% if source == 'facebook' %}selected{% endif %}>فيسبوك / ماسنجر</option>
+    </select>
+
     <button type="submit" class="btn btn-primary">بحث</button>
-    {% if search or status %}
+    {% if search or status or source %}
     <a href="{{ url_for('list_inquiries') }}" class="btn btn-ghost">مسح</a>
     {% endif %}
   </form>
@@ -187,18 +196,18 @@
   {% if pagination.pages > 1 %}
   <div class="pagination">
     {% if pagination.has_prev %}
-      <a href="{{ url_for('list_inquiries', page=pagination.prev_num, search=search, status=status) }}" class="page-btn">→</a>
+      <a href="{{ url_for('list_inquiries', page=pagination.prev_num, search=search, status=status, source=source) }}" class="page-btn">→</a>
     {% endif %}
     {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
       {% if p %}
-        <a href="{{ url_for('list_inquiries', page=p, search=search, status=status) }}"
+        <a href="{{ url_for('list_inquiries', page=p, search=search, status=status, source=source) }}"
            class="page-btn {% if p == pagination.page %}active{% endif %}">{{ p }}</a>
       {% else %}
         <span class="page-btn" style="opacity:.4">…</span>
       {% endif %}
     {% endfor %}
     {% if pagination.has_next %}
-      <a href="{{ url_for('list_inquiries', page=pagination.next_num, search=search, status=status) }}" class="page-btn">←</a>
+      <a href="{{ url_for('list_inquiries', page=pagination.next_num, search=search, status=status, source=source) }}" class="page-btn">←</a>
     {% endif %}
   </div>
   {% endif %}
