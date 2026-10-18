@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}طلبات النتائج{% endblock %}
+
+{% block topbar_title %}طلبات النتائج{% endblock %}
+{% block topbar_sub %}طلبات متابعة نتائج التحاليل{% endblock %}
+
+{% block content %}
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon si-blue">
+      <i data-lucide="file-text"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-label">إجمالي الطلبات</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon si-amber">
+      <i data-lucide="clock-3"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.pending }}</div>
+      <div class="stat-label">قيد الانتظار</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon si-green">
+      <i data-lucide="check"></i>
+    </div>
+    <div>
+      <div class="stat-value">{{ stats.done }}</div>
+      <div class="stat-label">تمت المعالجة</div>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <form method="GET" action="{{ url_for('list_result_requests') }}" class="toolbar-filters">
+    <div class="search-box">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input
+        type="text"
+        name="search"
+        placeholder="بحث بهوية العميل (رقم الهاتف أو الاسم)..."
+        value="{{ search or '' }}"
+        class="search-input"
+      >
+    </div>
+
+    <select name="status" class="form-control" style="width:160px" onchange="this.form.submit()">
+      <option value="">كل الحالات</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>
+        {{ 'قيد الانتظار' if s == Status.PENDING else 'تمت المعالجة' }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="btn btn-primary">بحث</button>
+    {% if search or status %}
+    <a href="{{ url_for('list_result_requests') }}" class="btn btn-ghost">مسح</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">قائمة طلبات النتائج</span>
+    <span class="text-muted" style="font-size:.85rem">{{ pagination.total if pagination else 0 }} نتيجة</span>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>هوية العميل (من المنصة)</th>
+          <th>تاريخ الطلب</th>
+          <th>الحالة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in result_requests %}
+        <tr>
+          <td class="text-muted">{{ r.id }}</td>
+          <td>
+            <span style="display:inline-flex;align-items:center;gap:.4rem;font-weight:600">
+              <i data-lucide="user-round" class="nav-icon"></i>
+              <span dir="auto">{{ r.user_identity or '-' }}</span>
+            </span>
+          </td>
+          <td class="text-muted">
+            {{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '—' }}
+          </td>
+          <td>
+            <form method="POST" action="{{ url_for('update_result_request_status', request_id=r.id) }}">
+              <select
+                name="status"
+                onchange="this.form.submit()"
+                class="status-select status-{{ r.status.value | lower | replace(' ', '-') }}"
+              >
+                {% for s in statuses %}
+                <option value="{{ s.value }}" {% if r.status == s %}selected{% endif %}>
+                  {{ 'قيد الانتظار' if s == Status.PENDING else 'تمت المعالجة' }}
+                </option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="{{ url_for('delete_result_request', request_id=r.id) }}"
+                  onsubmit="return confirm('هل أنت متأكد من حذف طلب النتائج؟')">
+              <button class="btn btn-danger btn-sm">حذف</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+            لا توجد طلبات نتائج
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination and pagination.pages > 1 %}
+  <div class="pagination">
+    {% if pagination.has_prev %}
+      <a href="{{ url_for('list_result_requests', page=pagination.prev_num, search=search, status=status) }}" class="page-btn">→</a>
+    {% endif %}
+    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+        <a href="{{ url_for('list_result_requests', page=p, search=search, status=status) }}"
+           class="page-btn {% if p == pagination.page %}active{% endif %}">{{ p }}</a>
+      {% else %}
+        <span class="page-btn" style="opacity:.4">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+      <a href="{{ url_for('list_result_requests', page=pagination.next_num, search=search, status=status) }}" class="page-btn">←</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

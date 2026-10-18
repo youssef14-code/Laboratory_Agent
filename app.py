@@ -36,6 +36,7 @@ from software_service.client_services import ClientService
 from software_service.lab_service_services import LabServiceService
 from software_service.platform_services import PlatformService
 from software_service.page_services import PageService
+from software_service.result_request_services import ResultRequestService
 from software_service.subscripition_service import SubscriptionService
 from datetime import datetime, timezone, timedelta
 
@@ -153,7 +154,14 @@ def inject_globals():
         pending_count = Inquiry.query.filter_by(status=Status.PENDING).count()
     except Exception:
         pending_count = 0
-    return dict(pending_inquiries_count=pending_count)
+    try:
+        pending_results_count = ResultRequestService.get_pending_count()
+    except Exception:
+        pending_results_count = 0
+    return dict(
+        pending_inquiries_count=pending_count,
+        pending_results_count=pending_results_count,
+    )
 
 
 from functools import wraps
@@ -1227,6 +1235,58 @@ def delete_complaint(complaint_id):
     complaint, message = ComplaintService.delete_complaint(complaint_id)
     flash(message, 'success' if complaint else 'error')
     return redirect(url_for('list_complaints'))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Lab result request routes
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/result-requests')
+@login_required
+def list_result_requests():
+    page = request.args.get('page', 1, type=int)
+    search = request.args.get('search', '').strip()
+    status = request.args.get('status', '').strip()
+
+    search_clean = None if not search or search == "None" else search
+    status_clean = None if not status or status == "None" else status
+
+    pagination = ResultRequestService.get_all(
+        page=page,
+        per_page=10,
+        search=search_clean,
+        status=status_clean,
+    )
+    stats = ResultRequestService.get_stats()
+
+    return render_template(
+        'result_requests/list.html',
+        result_requests=pagination.items if pagination else [],
+        pagination=pagination,
+        search=search_clean or '',
+        status=status_clean or '',
+        stats=stats,
+        Status=Status,
+        statuses=[Status.PENDING, Status.DONE],
+    )
+
+
+@app.route('/result-requests/<int:request_id>/status', methods=['POST'])
+@login_required
+def update_result_request_status(request_id):
+    new_status = request.form.get('status')
+    result_request, message = ResultRequestService.update_status(request_id, new_status)
+    flash(message, 'success' if result_request else 'error')
+    return redirect(request.referrer or url_for('list_result_requests'))
+
+
+@app.route('/result-requests/<int:request_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_result_request(request_id):
+    result_request, message = ResultRequestService.delete(request_id)
+    flash(message, 'success' if result_request else 'error')
+    return redirect(url_for('list_result_requests'))
 
 
 # ══════════════════════════════════════════════════════════════════════════

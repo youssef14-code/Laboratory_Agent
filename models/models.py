@@ -166,6 +166,15 @@ class Complaint(db.Model):
     comes_from = db.Column(db.String(100))
 
 
+class ResultRequest(db.Model):
+    __tablename__ = "result_requests"
+    id = db.Column(db.Integer, primary_key=True)
+    user_identity = db.Column(db.String(150), nullable=False, index=True)
+    laboratory_id = db.Column(db.Integer, db.ForeignKey("laboratory.id"), nullable=True)
+    status = db.Column(db.Enum(Status), default=Status.PENDING)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class Homevisit(db.Model):
     __tablename__='homevisits'
     id = db.Column(db.Integer, primary_key=True)

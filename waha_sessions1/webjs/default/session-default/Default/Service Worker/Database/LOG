@@ -1,2 +1,3 @@
-2026/10/14-18:19:32.047 f6 Creating DB /app/.sessions/webjs/default/session-default/Default/Service Worker/Database since it was missing.
-2026/10/14-18:19:32.051 f6 Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/Service Worker/Database/MANIFEST-000001
+2026/10/17-14:46:51.499 65 Reusing MANIFEST /app/.sessions/webjs/default/session-default/Default/Service Worker/Database/MANIFEST-000001
+2026/10/17-14:46:51.499 65 Recovering log #3
+2026/10/17-14:46:51.500 65 Reusing old log /app/.sessions/webjs/default/session-default/Default/Service Worker/Database/000003.log 

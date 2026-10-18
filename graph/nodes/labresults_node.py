@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 from graph.state import AgentState
 from graph.utils import detect_language_fallback
 from llm.llm import get_gemini
+from models.models import Page
 from software_service.client_services import ClientService
+from software_service.result_request_services import ResultRequestService
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +96,20 @@ CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
 
 def result_node(state: AgentState) -> dict:
 
+    identity = str(state.get("sender_identity") or state.get("sender_id") or "").strip()
     page_id = state.get("page_id")
     sender_id = state.get("sender_id")
     platform_id = state.get("platform_id")
+
+    try:
+        page = Page.query.filter_by(
+            platform_id=platform_id,
+            page_id=page_id,
+        ).first()
+        laboratory_id = page.laboratory_id if page else None
+        ResultRequestService.create_request(identity, laboratory_id)
+    except Exception:
+        logger.exception("[LabResults Node] Result request persist error")
 
     user_message = state["user_message"]
 

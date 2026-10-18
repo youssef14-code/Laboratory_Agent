@@ -28,7 +28,7 @@ def save_visit_tool(
 ) -> HomeVisitResult:
     """
     Saves a fully collected and confirmed home visit booking to the database.
-    All 7 fields are required.
+    details is optional; the caller sends placeholder text when no tests were given.
     """
     try:
         visit, message = HomeVisitService.create_visit(

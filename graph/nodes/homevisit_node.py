@@ -11,16 +11,20 @@ from software_service.client_services import ClientService
 from notified_center.EmailSender import send_visit_confirmation_email
 
 
+NO_TESTS_TEXT = "لم يتم تحديد التحاليل - سيتم التنسيق مع خدمة العملاء"
+NO_TESTS_PREFIX = "لم يتم تحديد"
+
+
 BOOKING_SYSTEM_PROMPT = """
 You are a helpful, empathetic, and professional AI Assistant for a Medical Laboratory specializing in Home Visit Sample Collection (خدمة الزيارات المنزلية لسحب العينات).
 
 Your task is to guide patients step-by-step to book Home Visits, extract prescription tests, answer questions accurately, and guide them through final confirmation.
 
 ====================
-1. STRICT MANDATORY BOOKING FIELDS (ALL 7 FIELDS ARE STRICTLY REQUIRED)
+1. BOOKING FIELDS (6 REQUIRED FIELDS + 1 OPTIONAL FIELD)
 ====================
 
-You MUST collect ALL 7 mandatory fields before you can show the confirmation summary or confirm the booking. Never skip any field or leave it as "None" or "غير محدد" or "لا يوجد":
+You MUST collect all 6 mandatory fields before you can show the confirmation summary or confirm the booking. Never leave a mandatory field as "None" or "غير محدد" or "لا يوجد":
 
 1. name: STRICTLY 4-PART FULL NAME (الاسم رباعي بالكامل):
    - The patient's name MUST consist of at least 4 parts/names (e.g. "محمد أحمد علي محمود").
@@ -33,7 +37,11 @@ You MUST collect ALL 7 mandatory fields before you can show the confirmation sum
 3. phone_number1: Primary contact phone digits exactly as written by the user. NEVER add, prepend, or guess prefixes (e.g. do not add 010/011/012 if the user did not write them).
 4. phone_number2: Secondary / alternative contact phone number (رقم هاتف إضافي أو بديل للتواصل). MUST ask the patient if not provided (e.g., "محتاجين رقم هاتف آخر للتواصل لتأكيد الحجز ومتابعة الموعد").
 5. address: DETAILED full physical address (Area + Street + Building number/name + Floor + Apartment + Landmark). NEVER accept incomplete/vague addresses.
-6. details: Requested laboratory test names.
+6. details (OPTIONAL): Requested laboratory test names.
+   - If the patient has not mentioned any tests, ask ONCE before the summary, in Egyptian Arabic, e.g.: "ايه التحاليل المطلوبة؟ ولو لسه مش حاسم أو مش عارف التحاليل، تقدر تكمل الحجز من غيرها وفريق خدمة العملاء هيتواصل معاك للتنسيق."
+   - If the patient gives tests, store them in `details`.
+   - If the patient says they do not know the tests, do not want to specify them, or will decide later (e.g. "مش عارف", "من غير تحاليل", "هحددها بعدين"), leave `details` empty and CONTINUE the booking. Do NOT ask again and do NOT block the booking.
+   - NEVER invent tests.
 7. date: Preferred visit date (e.g., YYYY-MM-DD or as stated).
 
 (Note: NEVER ask for visit time/hour — customer service contacts the patient to schedule the exact time slot).
@@ -289,11 +297,11 @@ Whenever presenting laboratory tests (whether inquired, requested, or extracted 
      "📌 تنبيه: عينة تحليل البراز لا يتم سحبها منزلياً، ويتم تسليمها لأقرب فرع لحضرتك."
 
 ====================
-5. CONFIRMATION WORKFLOW (ALL 7 MANDATORY FIELDS)
+5. CONFIRMATION WORKFLOW (6 REQUIRED FIELDS + 1 OPTIONAL FIELD)
 ====================
 
 STEP 1 — DISPLAY SUMMARY:
-When ALL 7 mandatory fields (name, age, phone_number1, phone_number2, address, details, date) are collected, show the summary and ask the patient to confirm:
+When the 6 mandatory fields (name, age, phone_number1, phone_number2, address, date) are collected AND the tests question was already asked once (tests provided, or the patient declined), show the summary and ask the patient to confirm:
 
 📋 ملخص بيانات الزيارة المنزلية:
 👤 الاسم: [Name]
@@ -301,7 +309,7 @@ When ALL 7 mandatory fields (name, age, phone_number1, phone_number2, address, d
 📱 رقم الهاتف الأساسي: [Phone 1]
 📞 رقم هاتف إضافي: [Phone 2]
 📍 العنوان: [Address]
-🧪 التحاليل: [Details]
+🧪 التحاليل: [Details, or "لم يتم تحديدها - سيتم التنسيق مع خدمة العملاء" if none were given]
 📅 التاريخ: [Date]
 
 هل تود تأكيد حجز الزيارة المنزلية بهذه البيانات؟
@@ -311,7 +319,7 @@ When ALL 7 mandatory fields (name, age, phone_number1, phone_number2, address, d
 STEP 2 — PATIENT CONFIRMS:
 When the patient replies positively to the confirmation question (e.g. agreeing, confirming, saying yes, تمام، تأكيد، أكد، ماشي، موافق،,etc.):
 - Set `confirmed = true`.
-- Keep ALL 7 collected fields intact in the `visit` data.
+- Keep ALL collected fields intact in the `visit` data (details may be empty).
 
 STEP 3 — POST CONFIRMATION:
 If the conversation already has a completed booking with a generated Reference ID, do not re-book unless the patient explicitly asks to make another separate booking.
@@ -477,8 +485,8 @@ Last Bot Message:
         addr = str(visit_data["address"]).strip()
         addr = re.split(r'(?:\.|\n)?\s*(?:Date|التاريخ|Booking|Status|Tests|التحاليل|Phone|الهاتف):', addr, flags=re.IGNORECASE)[0].strip()
         visit_data["address"] = addr
-    # 🔒 الحقول الـ 7 كلها إجبارية لتأكيد الحجز
-    required_fields = ["name", "age", "phone_number1", "phone_number2", "address", "details", "date"]
+    # 🔒 الحقول الـ 6 الإجبارية لتأكيد الحجز، والتحاليل اختيارية
+    required_fields = ["name", "age", "phone_number1", "phone_number2", "address", "date"]
     
     def _is_valid_field(key):
         val = visit_data.get(key)
@@ -488,6 +496,10 @@ Last Bot Message:
             return str(val).isdigit() and int(val) > 0
         return True
     all_fields_present = all(_is_valid_field(f) for f in required_fields)
+    tests_text = str(visit_data.get("details") or "").strip()
+    if tests_text in ["null", "None", "غير محدد", "لا يوجد"] or tests_text.startswith(NO_TESTS_PREFIX):
+        tests_text = ""
+    final_details = tests_text or NO_TESTS_TEXT
     visit_saved = False
     visit_reference = None
     booking_image = None
@@ -507,7 +519,7 @@ Last Bot Message:
             clean_reply = clean_reply.strip() + f"\n\n{total_str}"
     decision_path = "collecting_fields"
     updated_summary = parsed.summary or ""
-    # حفظ الحجز عند التأكيد واكتمال الحقول الـ 7
+    # حفظ الحجز عند التأكيد واكتمال الحقول الـ 6 الإجبارية
     if parsed.confirmed and all_fields_present:
         try:
             sender_identity = str(state.get("sender_identity") or state.get("sender_id") or "").strip()
@@ -522,7 +534,7 @@ Last Bot Message:
                 "phone_number1": str(visit_data["phone_number1"]),
                 "phone_number2": str(visit_data["phone_number2"]),
                 "address": str(visit_data["address"]),
-                "details": str(visit_data["details"]),
+                "details": final_details,
                 "date": str(visit_data["date"]),
                 "comes_from": source_label,
             }
@@ -540,7 +552,7 @@ Last Bot Message:
                         name=visit_data["name"],
                         phone=visit_data["phone_number1"],
                         address=visit_data["address"],
-                        details=visit_data["details"],
+                        details=final_details,
                         date=str(visit_data["date"]),
                         comes_from=source_label,
                     )
@@ -582,8 +594,8 @@ Last Bot Message:
         decision_path = "confirmed_but_incomplete"
         clean_reply = detect_language_fallback(
             user_message,
-            arabic="قبل ما أقدر أكد الحجز، محتاج أتأكد من استكمال كافة بيانات الزيارة (الاسم، السن، رقم الهاتف الأساسي، رقم هاتف إضافي، العنوان بالتفصيل، وتاريخ الزيارة). من فضلك كمل البيانات الناقصة.",
-            default="Before confirming, please provide all 7 required visit details.",
+            arabic="قبل ما أقدر أكد الحجز، محتاج أتأكد من استكمال بيانات الزيارة (الاسم رباعي، السن، رقم الهاتف الأساسي، رقم هاتف إضافي، العنوان بالتفصيل، وتاريخ الزيارة). من فضلك كمل البيانات الناقصة.",
+            default="Before confirming, please provide the 6 required visit details (name, age, two phone numbers, full address and date).",
         )
     # 📊 LOGGING
     def _status_icon(val):
@@ -596,10 +608,10 @@ Last Bot Message:
     print(f"  📱 Phone 1  : {_status_icon(visit_data.get('phone_number1'))}")
     print(f"  📞 Phone 2  : {_status_icon(visit_data.get('phone_number2'))}")
     print(f"  📍 Address  : {_status_icon(visit_data.get('address'))}")
-    print(f"  🧪 Details  : {_status_icon(visit_data.get('details'))}")
+    print(f"  🧪 Details  : {'➖ (optional, none given)' if not tests_text else _status_icon(tests_text)}")
     print(f"  📅 Date     : {_status_icon(visit_data.get('date'))}")
     print("─" * 65)
-    print(f"  🔍 Status   : {'✅ Ready (7/7)' if all_fields_present else '❌ Incomplete'} | Confirmed: {parsed.confirmed} | Path: {decision_path}")
+    print(f"  🔍 Status   : {'✅ Ready (6/6)' if all_fields_present else '❌ Incomplete'} | Confirmed: {parsed.confirmed} | Path: {decision_path}")
     if visit_saved:
         print(f"  🎉 Saved Successfully : ✅ Reference: {visit_reference}")
     print("─" * 65 + "\n")

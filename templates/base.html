@@ -66,6 +66,15 @@
       الشكاوى
     </a>
 
+    <a href="{{ url_for('list_result_requests') }}"
+       class="nav-item {% if request.endpoint == 'list_result_requests' %}active{% endif %}">
+      <i data-lucide="file-check" class="nav-icon"></i>
+      طلبات النتائج
+      {% if pending_results_count and pending_results_count > 0 %}
+      <span class="nav-badge">{{ pending_results_count }}</span>
+      {% endif %}
+    </a>
+
     <!-- ── قسم الإدارة والتحاليل (يظهر لمدير النظام Admin فقط) ── -->
     {% if current_user.is_authenticated and current_user.role == 'admin' %}
       
