@@ -25,6 +25,7 @@ def save_visit_tool(
     details: str,
     date: str,
     comes_from: str = "unknown",
+    total_price: Optional[float] = None,
 ) -> HomeVisitResult:
     """
     Saves a fully collected and confirmed home visit booking to the database.
@@ -40,6 +41,7 @@ def save_visit_tool(
             details=details.strip(),
             address=address.strip(),
             comes_from=comes_from.strip(),
+            total_price=total_price,
         )
 
         is_success = visit is not None

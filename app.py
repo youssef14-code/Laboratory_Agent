@@ -948,49 +948,29 @@ def delete_booking(booking_id):
 @app.route('/bookings/<int:booking_id>/ticket.pdf')
 @login_required
 def download_booking_ticket(booking_id):
-    from flask import send_file, abort
-    import os
-
-    booking, msg = HomeVisitService.get_visit_by_id(booking_id)
-    if not booking:
-        abort(404)
-
-    # 1. البحث عن ملف التذكرة الأصلي المحفوظ وقت الشات
-    tickets_dir = os.path.join(app.root_path, "static", "tickets")
-    saved_pdf_path = os.path.join(tickets_dir, f"{booking.reference_id}.pdf")
-
-    if os.path.exists(saved_pdf_path):
-        return send_file(
-            saved_pdf_path,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'ticket-{booking.reference_id}.pdf',
-        )
-
-    # 2. خطوة احتياطية (Fallback): لو كان الحجز قديم جداً ولا يوجد له ملف محفوظ
-    from graph.utils import generate_booking_pdf
     import io
+    from flask import send_file
+    from models.models import Homevisit
+    from graph.utils import generate_booking_pdf
 
-    phone1 = getattr(booking, 'phone_number1', None) or getattr(booking, 'phone_number', '') or ''
-    phone2 = getattr(booking, 'phone_number2', None) or ''
-    age = getattr(booking, 'age', None)
+    booking = Homevisit.query.get_or_404(booking_id)
 
     pdf_bytes = generate_booking_pdf(
-        name=booking.name or '',
-        phone_number1=phone1,
-        phone_number2=phone2,
-        age=age,
-        date=str(booking.date) if booking.date else '',
-        details=booking.details or '',
-        reference_id=booking.reference_id or '',
-        address=booking.address or '',
+        name=booking.name,
+        date=str(booking.date or ""),
+        details=booking.details or "",
+        reference_id=booking.reference_id,
+        address=booking.address or "",
+        phone_number1=getattr(booking, "phone_number1", "") or getattr(booking, "phone_number", ""),
+        phone_number2=getattr(booking, "phone_number2", "") or "",
+        age=getattr(booking, "age", None),
+        total_price=booking.total_price,
     )
-
     return send_file(
         io.BytesIO(pdf_bytes),
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f'ticket-{booking.reference_id}.pdf',
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"ticket_{booking.reference_id}.pdf"
     )
 
 # ══════════════════════════════════════════════════════════════════════════

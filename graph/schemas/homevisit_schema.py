@@ -35,9 +35,14 @@ class HomevisitResponse(BaseModel):
     reply: str = Field(
         description="Conversational response to the patient in Egyptian Arabic."
     )
-    test_prices: list[float] = Field(
-        default_factory=list,
-        description="List of prices for ALL active requested tests in this conversation (cumulative: include both previous and newly added test prices, e.g. [640.0, 35.0])."
+    total_price: float | None = Field(
+        default=None,
+        description=(
+            "The total estimated price calculated "
+            "directly by the LLM. "
+            "Never include home visit fees. "
+            "Return null if pricing is incomplete."
+        )
     )
     summary: str = Field(
         description=(

@@ -216,182 +216,36 @@ def _get_client_identity(message: IncomingMessage, page) -> str:
     if platform in {"facebook", "messenger"} or platform_id == 1:
         token = getattr(page, "token", None)
         page_id = getattr(page, "page_id", None)
+        sender_id = str(sender or getattr(message, "sender_id", "")).strip()
 
-        if not token:
-            logger.warning(
-                "[FB Identity] Page access token is missing; cannot look up profile name | page_id=%s",
-                page_id,
-            )
-        elif not sender:
-            logger.warning(
-                "[FB Identity] Sender ID is missing; cannot look up profile name | page_id=%s",
-                page_id,
-            )
-        else:
+        if token and sender_id:
             try:
-                url = f"https://graph.facebook.com/{FACEBOOK_GRAPH_API_VERSION}/{sender}"
+                url = f"https://graph.facebook.com/v19.0/{sender_id}"
                 response = requests.get(
                     url,
                     params={
-                        "fields": "first_name,last_name",
+                        "fields": "name,first_name,last_name",
                         "access_token": token,
                     },
                     timeout=5,
                 )
-                try:
+                if response.status_code == 200:
                     data = response.json()
-                except ValueError:
-                    logger.error(
-                        "[FB Identity] Graph API returned non-JSON response | api_version=%s page_id=%s sender_id=%s status=%s",
-                        FACEBOOK_GRAPH_API_VERSION,
-                        page_id,
-                        sender,
-                        response.status_code,
-                    )
-                else:
-                    if response.status_code == 200 and isinstance(data, dict):
-                        name = data.get("name")
-                        if not name:
-                            name = (
-                                f"{data.get('first_name') or ''} "
-                                f"{data.get('last_name') or ''}"
-                            ).strip()
-                        if name:
-                            logger.info(
-                                "[FB Identity] Profile name lookup succeeded | api_version=%s page_id=%s sender_id=%s",
-                                FACEBOOK_GRAPH_API_VERSION,
-                                page_id,
-                                sender,
-                            )
-                            return name
+                    name = data.get("name")
+                    if not name:
+                        name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+                    
+                    if name and str(name).strip().lower() not in ["none", "null", ""]:
+                        logger.info("[FB Identity] Profile name lookup succeeded: %s", name)
+                        return str(name).strip()
+            except Exception as e:
+                logger.warning("[FB Identity] Profile lookup error: %s", e)
 
-                        logger.warning(
-                            "[FB Identity] Graph API succeeded but returned no profile name | api_version=%s page_id=%s sender_id=%s response_fields=%s",
-                            FACEBOOK_GRAPH_API_VERSION,
-                            page_id,
-                            sender,
-                            sorted(data.keys()),
-                        )
-                    else:
-                        error = data.get("error") if isinstance(data, dict) else None
-                        if isinstance(error, dict):
-                            logger.error(
-                                "[FB Identity] Profile lookup failed | api_version=%s page_id=%s sender_id=%s status=%s type=%s code=%s subcode=%s message=%s fbtrace_id=%s",
-                                FACEBOOK_GRAPH_API_VERSION,
-                                page_id,
-                                sender,
-                                response.status_code,
-                                error.get("type"),
-                                error.get("code"),
-                                error.get("error_subcode"),
-                                error.get("message"),
-                                error.get("fbtrace_id"),
-                            )
-
-                            if response.status_code != 200:
-                                try:
-                                    token_check = requests.get(
-                                        f"https://graph.facebook.com/{FACEBOOK_GRAPH_API_VERSION}/me",
-                                        params={
-                                            "fields": "id",
-                                            "access_token": token,
-                                        },
-                                        timeout=5,
-                                    )
-                                    try:
-                                        token_data = token_check.json()
-                                    except ValueError:
-                                        logger.error(
-                                            "[FB Identity] Token/version diagnostic returned non-JSON | api_version=%s page_id=%s status=%s",
-                                            FACEBOOK_GRAPH_API_VERSION,
-                                            page_id,
-                                            token_check.status_code,
-                                        )
-                                    else:
-                                        token_error = (
-                                            token_data.get("error")
-                                            if isinstance(token_data, dict)
-                                            else None
-                                        )
-                                        if token_check.status_code == 200 and isinstance(token_data, dict) and token_data.get("id"):
-                                            token_page_id = str(token_data["id"])
-                                            logger.info(
-                                                "[FB Identity] Token/version diagnostic succeeded | api_version=%s token_accepted=true token_page_id=%s configured_page_id=%s page_match=%s; API version and token work for /me, so investigate sender profile access.",
-                                                FACEBOOK_GRAPH_API_VERSION,
-                                                token_page_id,
-                                                page_id,
-                                                token_page_id == str(page_id),
-                                            )
-                                        elif isinstance(token_error, dict):
-                                            token_error_code = token_error.get("code")
-                                            if token_error_code in (190, 102):
-                                                diagnosis = "token rejected, invalid, or expired"
-                                            elif "version" in str(token_error.get("message", "")).lower():
-                                                diagnosis = "Graph API version may be unsupported"
-                                            else:
-                                                diagnosis = "token and API version could not be verified"
-                                            logger.error(
-                                                "[FB Identity] Token/version diagnostic failed | diagnosis=%s api_version=%s page_id=%s status=%s type=%s code=%s subcode=%s message=%s fbtrace_id=%s",
-                                                diagnosis,
-                                                FACEBOOK_GRAPH_API_VERSION,
-                                                page_id,
-                                                token_check.status_code,
-                                                token_error.get("type"),
-                                                token_error_code,
-                                                token_error.get("error_subcode"),
-                                                token_error.get("message"),
-                                                token_error.get("fbtrace_id"),
-                                            )
-                                        else:
-                                            logger.error(
-                                                "[FB Identity] Token/version diagnostic returned unexpected response | api_version=%s page_id=%s status=%s response_type=%s",
-                                                FACEBOOK_GRAPH_API_VERSION,
-                                                page_id,
-                                                token_check.status_code,
-                                                type(token_data).__name__,
-                                            )
-                                except requests.RequestException as diagnostic_error:
-                                    logger.error(
-                                        "[FB Identity] Token/version diagnostic request failed | api_version=%s page_id=%s error_type=%s",
-                                        FACEBOOK_GRAPH_API_VERSION,
-                                        page_id,
-                                        type(diagnostic_error).__name__,
-                                    )
-                        else:
-                            logger.error(
-                                "[FB Identity] Profile lookup returned unexpected response | api_version=%s page_id=%s sender_id=%s status=%s response_type=%s",
-                                FACEBOOK_GRAPH_API_VERSION,
-                                page_id,
-                                sender,
-                                response.status_code,
-                                type(data).__name__,
-                            )
-
-            except requests.RequestException as request_error:
-                logger.error(
-                    "[FB Identity] Graph API request failed | api_version=%s page_id=%s sender_id=%s error_type=%s",
-                    FACEBOOK_GRAPH_API_VERSION,
-                    page_id,
-                    sender,
-                    type(request_error).__name__,
-                )
-
-        if not _is_empty_identity_name(sender_name):
-            logger.info(
-                "[FB Identity] Using sender name from incoming message | page_id=%s sender_id=%s",
-                page_id,
-                sender,
-            )
+        # إذا وصل الاسم جاهز من الـ Webhook
+        if sender_name and str(sender_name).strip().lower() not in ["none", "null", ""]:
             return str(sender_name).strip()
 
-        logger.warning(
-            "[FB Identity] No profile name available; falling back to sender ID | page_id=%s sender_id=%s",
-            page_id,
-            sender,
-        )
-        return sender
-
-    return sender
+        return "عميل فيسبوك"
 
 
 def _consume_subscription(message: "IncomingMessage", usage: dict) -> None:

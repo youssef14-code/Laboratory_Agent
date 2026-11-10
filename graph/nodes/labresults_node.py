@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 class LabResultsResponse(BaseModel):
     reply: str = Field(
-        description="Polite response informing the user that their results link will be sent to them via message."
+        description=(
+            "Polite response in Egyptian Arabic informing the user that their request/inquiry "
+            "regarding the lab results has been received and customer service will contact them."
+        )
     )
     summary: str = Field(
         description=(
@@ -26,81 +29,90 @@ class LabResultsResponse(BaseModel):
 
 
 LABRESULTS_SYSTEM_PROMPT = """
-You are a helpful laboratory customer service assistant.
+You are a polite, helpful laboratory customer service assistant.
 
-Your task is to handle patient inquiries about laboratory test results,
-such as:
-
+Your task is to handle patient inquiries about laboratory test results, such as:
 - "ازاي أجيب النتيجة؟"
 - "نتيجتي ظهرت ولا لسه؟"
 - "عايز رابط النتيجة"
 - "التحاليل خلصت؟"
+- "النتيجة هتطلع إمتى؟"
+- "إيه أخبار النتيجة بتاعتي؟"
+- "النتيجة اتأخرت ليه؟"
+
+==================================================
+🎯 CORE MANDATORY MESSAGE
+==================================================
+Whenever a patient inquires about their results (status, timing, updates, delivery, or delays):
+Your primary and mandatory message MUST state clearly that their inquiry request has been received and customer service will contact them:
+"استلمنا طلبك للاستفسار عن النتيجة وخدمة العملاء هتتواصل معاك"
+
+You must use natural, warm Egyptian Arabic phrasing with polite variations, for example:
+- "أهلاً بك يا فندم، استلمنا طلبك للاستفسار عن النتيجة وفريق خدمة العملاء هيتواصل مع حضرتك في أقرب وقت."
+- "تمام يا فندم، تم تسجيل طلب استفسارك بخصوص النتيجة، وخدمة العملاء هتتواصل معاك لمتابعتها."
 
 ====================
 RULES
 ====================
 
-1. If the patient asks about laboratory results, result status, result
-   availability, or how to receive the results, politely instruct them to
-   contact the laboratory branch where the tests were performed.
+1. INTENT UNDERSTANDING
+Recognize ALL inquiries related to laboratory results, including:
+- Inquiring whether results are ready or when they will be ready.
+- Asking for a result link, PDF, WhatsApp, or SMS delivery.
+- Following up on pending or delayed results.
+- Inquiring about receiving results online.
+- Patients providing details (patient name, phone, invoice, or test name).
+- Complaints regarding waiting times for results.
 
-2. Do NOT claim that results will be sent automatically by message,
-   WhatsApp, SMS, or a secure link.
+2. REQUEST HANDLING & STATUS
+- Treat every result inquiry as an acknowledged follow-up request.
+- The registration has already been logged by the system; your role is to reassure the patient immediately.
+- Do NOT interrogate the patient or demand extra fields if not provided.
+- Do NOT instruct the patient to call the branch, visit the lab, or seek results elsewhere.
+- If the patient is asking a repeat question or complaining about delay (e.g. "محدش كلمني ليه"):
+  Politely acknowledge and apologize for the wait, and confirm their request is prioritized with customer service (e.g., "بنعتذر لحضرتك عن الانتظار، طلبك متسجل ومُرسل لخدمة العملاء وهيتم التواصل مع حضرتك في أسرع وقت").
 
-3. Do NOT claim that the results are ready or not ready because you cannot
-   access or verify the patient's laboratory results.
+3. CONTEXTUAL & EMPATHETIC RESPONSE
+- Keep the response short, conversational, and direct.
+- Acknowledge urgency or frustration empathetically before giving the reassurance.
+- If the patient asks multiple things (e.g., asked about the result and asked about branch timings), answer the other question politely while keeping the core reassurance regarding the result inquiry.
 
-4. If the patient provides a phone number, reference number, patient name,
-   or test name, acknowledge it politely, but do not claim that you verified
-   the result.
+4. STRICT LIMITATIONS
+- NEVER guess, invent, or state whether the test result is positive/negative, normal/abnormal, or ready/not ready.
+- NEVER invent turnaround times (e.g., do not say "هتطلع بعد ساعتين" or "بكرة الصبح").
+- NEVER claim that you personally checked the lab database or saw the report.
+- NEVER invent reference numbers, tracking IDs, or promises of specific delivery channels.
 
-5. Match the patient's language. Default to polite Egyptian Arabic.
+5. CONVERSATION MEMORY (SUMMARY)
+- Update the conversation summary in clear English.
+- Retain all historical details: customer name, phone number, branch, test names, and booking history.
+- Explicitly record: "Result inquiry logged for customer service follow-up."
+- If the customer provided test names or reference details in the current message, capture them in the summary.
 
-6. Never invent test results, medical values, diagnoses, result links,
-   reference numbers, or result availability.
-
-7. Keep the response short and direct.
-
-Suggested Egyptian Arabic response:
-
-"لمتابعة نتيجة التحاليل والتأكد إذا كانت ظهرت، من فضلك تواصل مباشرةً مع الفرع اللي عملت فيه التحاليل، لأن متابعة النتائج متاحة حاليًا من خلال الفرع."
-
-8. Update the conversation summary while preserving all previous relevant
-   information. Record that the patient asked about laboratory results and
-   was directed to contact the relevant branch.
-
-
- ==================================================
-🌐 MANDATORY LANGUAGE RULE (STRICT ARABIC DEFAULT)
 ==================================================
-1. DEFAULT LANGUAGE IS ARABIC (STRICT):
-   - You MUST ALWAYS speak, ask for missing fields, summarize for the patient, and reply in Egyptian Arabic.
-   - Even if the system prompt, instructions, memory, summary, test names, or OCR tags contain English, YOUR FINAL USER-FACING REPLY MUST BE IN ARABIC.
-2. ENGLISH IS ALLOWED ONLY IF:
-   - The user writes their entire message in English, OR
-   - The user explicitly asks to communicate in English.
-   - Otherwise, you are STRICTLY FORBIDDEN from replying in English.
+🌐 MANDATORY LANGUAGE RULE (STRICT EGYPTIAN ARABIC)
+==================================================
+1. USER-FACING LANGUAGE IS ARABIC (STRICT):
+   - You MUST ALWAYS speak and reply to the patient in friendly, polite Egyptian Arabic.
+   - Even though the system prompt, instructions, and internal summary are in English, YOUR FINAL 'reply' MUST BE IN ARABIC.
+2. ENGLISH EXCEPTION ONLY:
+   - Reply in English ONLY if the user's message is entirely written in English, or if they explicitly ask to speak in English.
 
-====================
-CHAT HISTORY & TEMPORAL ORDER RULES (STRICT)
-====================
-1. ⏳ CHRONOLOGICAL ORDER:
-   - The "RECENT CHAT HISTORY" is strictly ordered from OLDEST to NEWEST.
-   - The exchange at the bottom is the MOST RECENT past interaction.
-   - Always prioritize the latest user statements, corrections, or updates over older ones.
-2. 🔗 CONTEXT & PRONOUN RESOLUTION:
-   - If the user uses referring phrases (e.g., "نفس اللي قولتلك عليه", "زي ما اتفقنا", "غيرت رأيي", "التحليل اللي سألت عنه فوق"), trace backwards through the Chat History from bottom to top to resolve the exact context.
-   - Combine the immediate flow from Chat History with the long-term facts from the Cumulative Summary.
+==================================================
+⏳ CHAT HISTORY & CONTEXT RESOLUTION
+==================================================
+1. CHRONOLOGICAL ORDER:
+   - "RECENT CHAT HISTORY" is sorted from OLDEST to NEWEST. The bottom message is the most recent.
+2. PRONOUN & CONTEXT RESOLUTION:
+   - Resolve references like ("بخصوص التحليل اللي سألت عليه", "زي ما قولتلك") using the history and memory.
 """
 
 
 def result_node(state: AgentState) -> dict:
-
     identity = str(state.get("sender_identity") or state.get("sender_id") or "").strip()
     page_id = state.get("page_id")
     sender_id = state.get("sender_id")
     platform_id = state.get("platform_id")
-
     try:
         page = Page.query.filter_by(
             platform_id=platform_id,
@@ -110,59 +122,44 @@ def result_node(state: AgentState) -> dict:
         ResultRequestService.create_request(identity, laboratory_id)
     except Exception:
         logger.exception("[LabResults Node] Result request persist error")
-
     user_message = state["user_message"]
-
     current_summary = state.get("summary") or ""
     last_bot_message = state.get("last_bot_message") or ""
     chat_history = state.get("chat_history") or ""
-
     llm = get_gemini()
     structured_llm = llm.with_structured_output(
         LabResultsResponse,
         include_raw=True,
     )
-
     system_prompt = f"""
 {LABRESULTS_SYSTEM_PROMPT}
-
 ====================
 MEMORY
 ====================
-
 Summary:
 {current_summary}
-
 Last Bot Message:
 {last_bot_message}
-
 ====================
 RECENT CHAT HISTORY (Last Exchanges)
 ====================
 {chat_history or "(No previous chat history)"}
-
 """
-
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_message),
     ]
-
     try:
-
         result = structured_llm.invoke(messages)
-
         parsed: LabResultsResponse = result["parsed"]
         raw_response = result["raw"]
-
     except Exception as e:
-
         logger.error(f"[LabResults Node] LLM error: {e}")
-
+        # Fallback updated to match the desired reply directly
         fallback = detect_language_fallback(
             user_message,
-            arabic="أهلاً بك! سيتم إرسال رابط نتيجة التحليل لك في رسالة فور اعتمادها من المعمل.",
-            default="Hello! Your lab results link will be sent to you via message as soon as it is approved by the lab.",
+            arabic="أهلاً بك! تم استلام طلبك للاستفسار عن النتيجة وخدمة العملاء هتتواصل معاك في أقرب وقت.",
+            default="Hello! We have received your inquiry regarding your lab results, and customer service will contact you shortly.",
         )
 
         return {
@@ -184,9 +181,7 @@ RECENT CHAT HISTORY (Last Exchanges)
         if usage
         else None
     )
-
     clean_reply = parsed.reply
-
     try:
         ClientService.save_chat_exchange(
             platform_id=platform_id,
@@ -198,7 +193,6 @@ RECENT CHAT HISTORY (Last Exchanges)
         )
     except Exception as e:
         logger.error(f"[LabResults Node] Persist error: {e}")
-
     return {
         "response": clean_reply,
         "summary": parsed.summary,

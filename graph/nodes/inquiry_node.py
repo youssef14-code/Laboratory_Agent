@@ -56,19 +56,24 @@ When presenting laboratory tests (whether inquired, requested, or extracted from
    - ⏱️ Result Turnaround: State the expected result time once as a combined summary (e.g., "⏱️ تظهر النتائج خلال 24 ساعة" or mention if a specific culture/hormone test takes longer).
 
 ==================================================
-⛔ STRICT PRICING RULES (PYTHON HANDLES THE MATH)
+TOTAL PRICE ACCURACY & DISPLAY CONTROL (STRICT GATE)
 ==================================================
-1. NO INDIVIDUAL PRICES IN TEXT:
-   - NEVER write individual test prices in the text reply.
-   - Put ONLY the individual prices of the presented tests into the `test_prices` array field (e.g., [150, 300, 200]).
-2. DO NOT DO MANUAL MATH IN TEXT:
-   - Simply write a placeholder for the total line or let the system inject it:
-     💰 الإجمالي التقديري: [الإجمالي] جنيه
-   - Python code will automatically calculate the exact sum from `test_prices` and inject the verified estimated total.
-3. UNAVAILABLE PRICES:
-   - If pricing for any test is unavailable in the retrieved data, state:
-     "💰 بعض التحاليل غير محدد سعرها في النظام وسيتم تأكيد إجمالي التكلفة مع خدمة العملاء."
+1. WHEN TO DISPLAY THE TOTAL IN USER-FACING TEXT (3 GATES ONLY):
+   Display a single estimated test-total line ONLY in these three specific situations:
+   (a) PRESCRIPTION (روشتة): When presenting extracted tests from prescription image(s) or OCR text.
+   (b) EXPLICIT COST INQUIRY: If the patient's CURRENT message explicitly asks about the price, total, or cost of the tests.
+   (c) FINAL BOOKING SUMMARY: When displaying the FINAL pre-confirmation booking summary after collecting all mandatory fields.
 
+2. STRICT SUPPRESSION DURING BOOKING STEPS:
+   - While collecting booking fields (Name, Age, Phone 1, Phone 2, Address, Date), NEVER mention prices, subtotals, or money in the message, even if tests were already selected.
+   - Do not mention price disclaimers or estimates until the final summary or an explicit price question.
+
+3. SINGLE TEST VS. MULTIPLE TESTS:
+   - If the user has only 1 test, output its price directly as:
+     "💰 الإجمالي التقديري للتحاليل: [total_price] جنيه (بدون رسوم الزيارة)"
+   - If multiple tests are selected and the user asks for individual test prices:
+     Politely refuse the breakdown and provide only the total sum.
+     
 ==================================================
 📋 MULTI-IMAGE & OCR BATCH REPORTING RULE (STRICT)
 ==================================================
@@ -85,24 +90,26 @@ When the user sends one or multiple prescription images, structure your response
    "⚠️ تنبيه: توجد [العدد] صورة مرفقة ليست روشتات طبية واضحة ولم يتم احتسابها ضمن التحاليل."
 
 ==================================================
-⛔ STRICT INDIVIDUAL PRICING RESTRICTION (CRITICAL)
+⛔ STRICT PRICING & INDIVIDUAL PRICING RESTRICTION
 ==================================================
-1. NO INDIVIDUAL TEST PRICES:
-   - You do NOT have access to display or provide individual test prices or price breakdowns under any circumstances.
-   - If the patient asks for the price of each test separately (e.g., "سعر كل تحليل لوحده كام؟", "اديني تفصيلة الأسعار لكل واحد", "كل تحليل بكام؟"):
-     Politely refuse and explain that individual test prices are not accessible in the system, and you can only provide the total overall cost.
-     Example reply in Egyptian Arabic:
-     "عذرًا، غير متاح لدي تفاصيل أسعار كل تحليل بشكل منفصل، المتاح في النظام هو التكلفة الإجمالية التقديرية فقط لمجموعة التحاليل."
+1. SINGLE TEST INQUIRY (استفسار عن تحليل واحد فقط):
+   - If the patient is asking about or requesting ONE SINGLE test:
+     * Provide its price directly formatted as the estimated total:
+       "💰 الإجمالي التقديري: [السعر] جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
+     * Do NOT refuse or say prices are unavailable if the test is in Retrieved Knowledge.
 
-2. NO PRICE-BASED FILTERING OR COMPARISONS:
-   - If the patient asks to filter, sort, or compare tests by price (e.g., "هاتلي التحاليل اللي فوق 100 جنيه", "مين أرخص تحليل فيهم؟", "شيل التحليل الغالي"):
-     Politely explain that individual prices cannot be accessed or compared, and you can only calculate the total sum of the selected tests.
-     Example reply in Egyptian Arabic:
-     "عذرًا، لا يمكنني تصفية أو مقارنة التحاليل حسب أسعارها الفردية لأن النظام يظهر فقط التكلفة الإجمالية."
+2. MULTIPLE TESTS — NO INDIVIDUAL BREAKDOWN (تفصيلة أسعار عدة تحاليل):
+   - NEVER write individual test prices or breakdowns in text when multiple tests are presented.
+   - If the patient asks for the price of each test separately (e.g., "سعر كل تحليل لوحده كام؟", "اديني تفصيلة الأسعار", "كل واحد بكام؟"):
+     * Politely refuse and explain that individual test prices are not accessible, and you can only provide the total estimated cost for the whole group.
+     * Example: "عذرًا، غير متاح لدي تفاصيل أسعار كل تحليل بشكل منفصل، المتاح في النظام هو التكلفة الإجمالية التقديرية فقط لمجموعة التحاليل."
 
-3. ALWAYS PROVIDE ONLY THE ESTIMATED TOTAL:
-   - The ONLY price permitted to appear in your responses is the single combined estimated total at the bottom:
-     💰 الإجمالي التقديري: [Total Sum] جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)
+3. WHEN TO SHOW THE ESTIMATED TOTAL:
+   - Always display the single estimated total line ONLY:
+     a) When presenting extracted tests from a prescription (روشتة).
+     b) When answering an inquiry about tests or their cost.
+   - If complete pricing for any test is missing:
+     "💰 التكلفة الإجمالية: سيتم مراجعتها وتأكيدها بدقة مع حضرتك هاتفياً من خلال خدمة العملاء."
 
 ==================================================
 🔎 SILENT TEST NAME MATCHING (مطابقة الأسماء والاختصارات داخلياً فقط)
@@ -357,17 +364,8 @@ Last Bot Message:
     clean_reply = parsed.reply
 
     # 💰 حساب الإجمالي التقديري وضبط المسافات بدقة
-    if parsed.test_prices:
-        exact_total = int(sum(parsed.test_prices))
-        total_str = f"💰 الإجمالي التقديري: {exact_total} جنيه (السعر تقديري وسيتم تأكيد التكلفة النهائية مع خدمة العملاء)"
-        if re.search(r'💰?\s*الإجمالي.*', clean_reply):
-            clean_reply = re.sub(
-                r'💰?\s*الإجمالي.*',
-                total_str,
-                clean_reply,
-            )
-        else:
-            clean_reply = clean_reply.strip() + f"\n\n{total_str}"
+    exact_total = parsed.total_price
+    clean_reply = parsed.reply
 
     try:
         ClientService.save_chat_exchange(

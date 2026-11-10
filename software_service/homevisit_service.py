@@ -66,7 +66,7 @@ class HomeVisitService(BaseService):
 
     # ── helper function ────────────────────────────────────────────────────────────────
     @staticmethod
-    def _build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address):
+    def _build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address, total_price=None):
         return Homevisit(
             reference_id=uuid.uuid4().hex[:12].upper(),
             name=name.strip(),
@@ -78,21 +78,22 @@ class HomeVisitService(BaseService):
             comes_from=comes_from,
             status=Status.PENDING,
             booking_time=datetime.now(timezone.utc),
-            address=address
+            address=address,
+            total_price=total_price,
         )
     # ── create ────────────────────────────────────────────────────────────────
     @staticmethod
-    def create_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address):
+    def create_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address, total_price=None):
         if not name or not name.strip():
             return None, "اسم المريض مطلوب"
         if not phone_number1 or not phone_number1.strip():
             return None, "رقم الهاتف مطلوب"
         if not address or not address.strip():
             return None, "العنوان مطلوب"
-        visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address)
+        visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address, total_price)
         res, msg = BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
         if res is None:
-            visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address)
+            visit = HomeVisitService._build_visit(name, age, phone_number1, phone_number2, date, details, comes_from, address, total_price)
             return BaseService.commit(visit, success_msg="تم إنشاء الحجز بنجاح", error_prefix="حدث خطأ أثناء إنشاء الحجز")
         return res, msg
     # ── update ────────────────────────────────────────────────────────────────

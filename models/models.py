@@ -1,7 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone, timedelta
 from flask_login import UserMixin
-from sqlalchemy import PrimaryKeyConstraint, ForeignKeyConstraint
+from sqlalchemy import PrimaryKeyConstraint, ForeignKeyConstraint, Numeric
 from enum import Enum
 db = SQLAlchemy()
 
@@ -190,6 +190,7 @@ class Homevisit(db.Model):
     
     comes_from = db.Column(db.String(100))
     address = db.Column(db.String(255), nullable=False)
+    total_price = db.Column(Numeric(10, 2), nullable=True)
 
 class RequestCounter(db.Model):
     __tablename__ = 'request_counter'

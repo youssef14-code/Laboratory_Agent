@@ -59,6 +59,17 @@
         <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">رقم هاتف إضافي / بديل</div>
         <div style="font-weight:600;">{{ booking.phone_number2 or '—' }}</div>
       </div>
+
+      <div>
+        <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">الإجمالي التقديري</div>
+        <div style="font-weight:600;">
+          {% if booking.total_price is not none %}
+            {{ booking.total_price }} ج.م (بدون رسوم الزيارة)
+          {% else %}
+            غير محدد
+          {% endif %}
+        </div>
+      </div>
       
       <div>
         <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">العنوان</div>

@@ -389,7 +389,7 @@ def generate_booking_pdf(
         except Exception as e:
             print(f"[generate_booking_pdf] Error calculating total: {e}")
 
-    price_display = f"{total_price} ج.م (بدون رسوم الزيارة)" if total_price else "يتم تأكيده مع خدمة العملاء"
+    price_display = f"{total_price} ج.م (بدون رسوم الزيارة)" if total_price is not None else "يتم تأكيده مع خدمة العملاء"
 
     # ── حساب سنة الميلاد والسن ────────────────────────────────────────────────
     main_phone = phone_number1 or phone or "—"
@@ -497,7 +497,9 @@ def generate_booking_image(
     phone: str = "",
     dpi: int = 200,
 ) -> bytes:
-    """يولد بطاقة الحجز كصورة PNG عالية الجودة باستخدام pymupdf."""
+    """يولد بطاقة الحجز كصورة PNG ويحفظ نفس نسخة الـ PDF للطباعة لاحقاً."""
+    
+    # 1. توليد الـ PDF بالسعر المظبوط (200 ج.م مثلاً)
     pdf_bytes = generate_booking_pdf(
         name=name,
         date=date,
@@ -511,18 +513,19 @@ def generate_booking_image(
         phone=phone,
     )
 
-    # حفظ نسخة الـ PDF للتأكد من تطابقها عند الطباعة من الداشبورد
+    # 💾 2. حفظ نفس ملف الـ PDF على السيرفر حتى يكون هو نفسه تماماً عند الطباعة
     try:
-        from flask import current_app
-        tickets_dir = os.path.join(current_app.root_path, "static", "tickets")
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        tickets_dir = os.path.join(base_dir, "static", "tickets")
         os.makedirs(tickets_dir, exist_ok=True)
         pdf_path = os.path.join(tickets_dir, f"{reference_id}.pdf")
         with open(pdf_path, "wb") as f:
             f.write(pdf_bytes)
+        print(f"[generate_booking_image] ✅ Ticket PDF saved: {pdf_path}")
     except Exception as e:
-        print(f"[generate_booking_image] Could not cache PDF ticket: {e}")
+        print(f"[generate_booking_image] ⚠️ Could not save PDF ticket: {e}")
 
-    # تحويل الـ PDF لـ PNG
+    # 3. تحويل نفس الـ PDF لصورة PNG لإرسالها في الشات
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     page = doc[0]
     zoom = dpi / 72

@@ -13,7 +13,9 @@
     </div>
   </div>
 
-  <form action="{{ url_for('edit_lab', lab_id=lab.id) }}" method="POST" style="padding:24px;">
+  <form action="{{ url_for('edit_lab', lab_id=lab.id, page=page, search=search) }}" method="POST" style="padding:24px;">
+    <input type="hidden" name="page" value="{{ page }}">
+    {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
     <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
 
       <div class="form-group" style="grid-column: span 2;">
@@ -94,7 +96,7 @@
         <i data-lucide="save"></i>
         حفظ التعديلات
       </button>
-      <a href="{{ url_for('list_labs') }}" class="btn btn-ghost btn-lg">إلغاء وتراجع</a>
+      <a href="{{ url_for('list_labs', page=page, search=search) }}" class="btn btn-ghost btn-lg">إلغاء وتراجع</a>
     </div>
   </form>
 </div>
