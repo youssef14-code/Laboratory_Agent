@@ -68,6 +68,17 @@ load_dotenv()
 # ── App & Config ──────────────────────────────────────────────────────────────
 app = Flask(__name__)
 
+from zoneinfo import ZoneInfo
+
+@app.template_filter('cairo_time')
+def cairo_time(dt, fmt='%Y-%m-%d %I:%M %p'):
+    if not dt:
+        return '—'
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("Africa/Cairo")).strftime(fmt)
+
+
 secret_key = os.environ.get('SECRET_KEY')
 if not secret_key:
     raise RuntimeError("SECRET_KEY must be set in environment — no default allowed in production")
@@ -717,6 +728,7 @@ def create_lab():
     sample_type = (f.get('sample_type') or '').strip()
     durations = (f.get('durations') or '').strip()
     instructions = (f.get('patient_instructions') or '').strip()
+    pricing_notes = (f.get('pricing_notes') or '').strip() or None  # 👈 1. التقاط ملاحظات السعر
  
     if not name:
         flash("اسم التحليل مطلوب", 'error')
@@ -740,6 +752,7 @@ def create_lab():
         name=name, price=price, sample_type=sample_type, durations=durations,
         patient_instructions=instructions, description=description,
         alias_names=aliases, keywords=keywords, search_text=search_text,
+        pricing_notes=pricing_notes,  # 👈 2. تمريرها للحفظ
     )
     if not lab:
         flash(msg, 'error')
@@ -753,15 +766,34 @@ def create_lab():
  
  
 # ================================================================== edit
- 
+from urllib.parse import urlparse, parse_qs
+
 @app.route('/labs/<int:lab_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_lab(lab_id):
+    # 1. محاولة التقاط page و search من الـ URL أو الـ Form
+    page = request.args.get('page') or request.form.get('page')
+    search = request.args.get('search') or request.form.get('search')
+
+    # 2. لو ضاعوا (كما يحدث في الـ POST)، نلتقطهم مباشرة من الـ Referrer (الرابط الذي جاء منه المتصفح)
+    if (not page or page == '1') and request.referrer:
+        try:
+            parsed = urlparse(request.referrer)
+            qs = parse_qs(parsed.query)
+            if 'page' in qs and qs['page']:
+                page = qs['page'][0]
+            if not search and 'search' in qs and qs['search']:
+                search = qs['search'][0]
+        except Exception:
+            pass
+
+    page = int(page) if page else 1
+    search = (search.strip() if search else None) or None
+    
     lab, msg = LabServiceService.get_lab_by_id(lab_id)
     if not lab:
         flash(msg, 'error')
-        return redirect(url_for('list_labs'))
- 
+        return redirect(url_for('list_labs', page=page, search=search))
     if request.method == 'GET':
         return _render_lab_form('edit', lab)
  
@@ -770,6 +802,7 @@ def edit_lab(lab_id):
     sample_type = (f.get('sample_type') or '').strip()
     durations = (f.get('durations') or '').strip()
     instructions = (f.get('patient_instructions') or '').strip()
+    pricing_notes = (f.get('pricing_notes') or '').strip() or None  # 👈 3. التقاط ملاحظات السعر في التعديل
  
     if not name:
         flash("اسم التحليل مطلوب", 'error')
@@ -797,6 +830,7 @@ def edit_lab(lab_id):
         durations=durations, patient_instructions=instructions,
         description=description, alias_names=aliases,
         keywords=keywords, search_text=search_text,
+        pricing_notes=pricing_notes,  # 👈 4. تمريرها للتحديث
     )
     if not updated:
         flash(msg, 'error')
@@ -809,7 +843,9 @@ def edit_lab(lab_id):
         flash("تم حفظ التعديلات وتحديث الفهرس الدلالي بنجاح", 'success')
     else:
         flash("تم حفظ التعديلات، لكن فشل تحديث الفهرس الدلالي — قد لا تظهر النتائج الجديدة في البحث الدلالي حتى يتم عمل rebuild يدوي.", 'warning')
-    return redirect(url_for('list_labs'))
+        
+    # الرجوع لنفس الصفحة والبحث
+    return redirect(url_for('list_labs', page=page, search=search))
  
  
 # ================================================================ delete
@@ -817,11 +853,12 @@ def edit_lab(lab_id):
 @app.route('/labs/<int:lab_id>/delete', methods=['POST'])
 @login_required
 def delete_lab(lab_id):
+    page = request.args.get('page') or request.form.get('page') or 1
+    search = request.args.get('search') or request.form.get('search') or None
+
     lab, msg = LabServiceService.delete_lab(lab_id)
     flash(msg, 'success' if lab else 'error')
-    return redirect(url_for('list_labs'))
-
-
+    return redirect(url_for('list_labs', page=page, search=search))
 
 # ══════════════════════════════════════════════════════════════════════════
 # Booking routes

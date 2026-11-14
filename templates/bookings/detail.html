@@ -96,7 +96,7 @@
 
       <div>
         <div class="text-muted" style="font-size:.8rem;margin-bottom:.35rem;">وقت التسجيل</div>
-        <div>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M') if booking.booking_time else '—' }}</div>
+        <div>{{ booking.booking_time|cairo_time if booking.booking_time else '—' }}</div>
       </div>
 
       {% if booking.details %}

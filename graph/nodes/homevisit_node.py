@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from graph.nodes.homevisit_tool import save_visit_tool
@@ -458,7 +459,8 @@ def visit_node(state: AgentState) -> dict:
     last_bot_message = state.get("last_bot_message") or ""
     chat_history = state.get("chat_history") or ""
     rag_context = state.get("rag_context") or ""
-    now = datetime.now()
+    # توقيت مصر الحالي بدقة (صيفي / شتوي)
+    now = datetime.now(ZoneInfo("Africa/Cairo"))
     current_time_info = now.strftime("Today is %A, %B %d, %Y. Current time is %I:%M %p")
     llm = get_gemini()
     structured_llm = llm.with_structured_output(

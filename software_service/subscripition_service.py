@@ -71,9 +71,28 @@ class SubscriptionService(BaseService):
         if not subscription:
             return False, "No subscription."
 
+        # 1. فحص انتهاء مدة الاشتراك (الشهر)
+        # لو end_date مش موجود بيحسب 30 يوم من تاريخ البداية تلقائياً
+        end = subscription.end_date or (
+            subscription.start_date + timedelta(days=30) if subscription.start_date else None
+        )
+        if end:
+            now = datetime.now(timezone.utc)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=timezone.utc)
+
+            if now > end:
+                # إيقاف الاشتراك في قاعدة البيانات فوراً
+                if subscription.is_active:
+                    subscription.is_active = False
+                    db.session.commit()
+                return False, "Subscription expired."
+
+        # 2. فحص لو الاشتراك معطل يدوياً
         if not subscription.is_active:
             return False, "Subscription suspended."
 
+        # 3. فحص تجاوز عدد الرسائل المسموحة
         if subscription.message_used >= (
             subscription.message_limit +
             subscription.grace_limit
@@ -120,12 +139,26 @@ class SubscriptionService(BaseService):
                 "color": "danger",
             }
 
+        # 1. فحص انتهاء التاريخ أولاً
+        if subscription.end_date:
+            now = datetime.now(timezone.utc)
+            end = subscription.end_date
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=timezone.utc)
+            if now > end:
+                return {
+                    "text": "Expired",
+                    "color": "danger",
+                }
+
+        # 2. فحص لو معطل يدوياً
         if not subscription.is_active:
             return {
                 "text": "Suspended",
                 "color": "danger",
             }
 
+        # 3. فحص تخطي الرسائل
         if subscription.message_used >= (
             subscription.message_limit +
             subscription.grace_limit
@@ -135,6 +168,7 @@ class SubscriptionService(BaseService):
                 "color": "warning",
             }
 
+        # 🔴 لازم السطر ده عشان الاشتراكات الشغالة
         return {
             "text": "Active",
             "color": "success",

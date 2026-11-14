@@ -53,6 +53,7 @@ class LabService(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     price = db.Column(db.Float, nullable=False)
+    pricing_notes = db.Column(db.String(255), nullable=True)
     patient_instructions= db.Column(db.Text)
     durations = db.Column(db.String(100))
     keywords = db.Column(db.JSON)

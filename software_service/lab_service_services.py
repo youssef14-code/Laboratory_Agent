@@ -24,7 +24,8 @@ class LabServiceService(BaseService):
                 )
             )
 
-        query = query.order_by(LabService.name.asc())
+        # ترتيب تصاعدي حسب الـ id (من 1، 2، 3 ...)
+        query = query.order_by(LabService.id.asc())
         return BaseService.paginate(query, page=page, per_page=per_page, success_msg="تم العثور على التحاليل")
 
     # -- single -----------------------------------------------------------------
@@ -76,6 +77,7 @@ class LabServiceService(BaseService):
             alias_names=list(alias_names) if alias_names else None,
             keywords=list(keywords) if keywords else None,
             search_text=(search_text or "").strip() or None,
+            pricing_notes=pricing_notes,
         )
         return BaseService.commit(lab, success_msg="تم إنشاء التحليل بنجاح", error_prefix="حدث خطأ أثناء إنشاء التحليل")
     # -- update -------------------------------------------------------------------
@@ -86,7 +88,7 @@ class LabServiceService(BaseService):
     def update_lab(lab_id, name=None, price=None, sample_type=None,
                     durations=None, patient_instructions=None,
                     description=None, alias_names=None, keywords=None,
-                    search_text=None):
+                    search_text=None, pricing_notes=None):
         lab = db.session.get(LabService, lab_id)
         if not lab:
             return None, "التحليل غير موجود"
@@ -121,6 +123,10 @@ class LabServiceService(BaseService):
             lab.durations = durations.strip() or None
         if patient_instructions is not None:
             lab.patient_instructions = patient_instructions.strip() or None
+
+        # 👈 حقل ملاحظات التسعير
+        if pricing_notes is not None:
+            lab.pricing_notes = pricing_notes.strip() or None
 
         # knowledge fields (JSON columns take real lists)
         if description is not None:

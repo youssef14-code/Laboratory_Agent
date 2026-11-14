@@ -3,7 +3,8 @@ software_services/client_services.py
 """
 
 import logging
-
+from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 from models.models import ChatHistory, Client, db, Page, Laboratory
 from notified_center.EmailSender import send_production_alert
@@ -216,7 +217,10 @@ class ClientService(BaseService):
         for exchange in history:
             date_str = ""
             if exchange.created_at:
-                date_str = exchange.created_at.strftime("%Y-%m-%d %H:%M")
+                dt = exchange.created_at
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                date_str = dt.astimezone(ZoneInfo("Africa/Cairo")).strftime("%Y-%m-%d %I:%M %p")
 
             user_msg = str(exchange.user_message or "").strip()
             # 🛡️ حماية فورية: لو فيه كود Base64 قديم متخزن في الداتابيز استبدله فوراً بـ [صورة]

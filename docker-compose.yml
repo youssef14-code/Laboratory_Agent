@@ -107,8 +107,7 @@ services:
       - WH_EVENTS=message.upsert,message.any
       - WAHA_SESSION_STORE=FILE
       - WAHA_SESSIONS_DIR=/app/.sessions
-      - WHATSAPP_DEFAULT_ENGINE=WEBJS
-      - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
       - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
       - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
       - WAHA_BASE_URL=http://waha1:3000
@@ -133,8 +132,7 @@ services:
       - WH_EVENTS=message.upsert,message.any
       - WAHA_SESSION_STORE=FILE
       - WAHA_SESSIONS_DIR=/app/.sessions
-      - WHATSAPP_DEFAULT_ENGINE=WEBJS
-      - PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-zygote,--disable-extensions
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
       - WAHA_SESSION_CONFIG_IGNORE_STATUS=true
       - WAHA_SESSION_CONFIG_IGNORE_BROADCAST=true
       - WAHA_BASE_URL=http://waha2:3000

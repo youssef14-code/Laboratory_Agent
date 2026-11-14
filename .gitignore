@@ -40,3 +40,5 @@ dist/
 /waha_sessions/default
 
 credentials.json
+
+waha_sessions*/
